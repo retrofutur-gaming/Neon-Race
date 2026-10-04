@@ -38,7 +38,7 @@
             color: #ff2a70;
             text-shadow: 0 0 10px #ff2a70;
         }
-        #progressBarContainer {
+        #fuelBarContainer {
             width: 180px;
             height: 14px;
             border: 2px solid #ffffff;
@@ -46,11 +46,12 @@
             background: rgba(0,0,0,0.8);
             box-shadow: 0 0 10px #00ffff;
         }
-        #progressBar {
-            width: 45%;
+        #fuelBar {
+            width: 100%;
             height: 100%;
-            background: #ff00aa;
-            box-shadow: 0 0 12px #ff00aa;
+            background: #00ff66;
+            box-shadow: 0 0 12px #00ff66;
+            transition: width 0.1s linear, background-color 0.3s;
         }
         #minimap {
             position: absolute;
@@ -119,8 +120,8 @@
     <div id="hud">
         SCORE: <span id="score">002450</span><br>
         LIVES: <span id="lives" class="hearts">♥ ♥ ♥</span><br>
-        PROGRESS: <span id="progressText">45%</span>
-        <div id="progressBarContainer"><div id="progressBar"></div></div>
+        FUEL: <span id="fuelText">100%</span>
+        <div id="fuelBarContainer"><div id="fuelBar"></div></div>
     </div>
 
     <canvas id="minimap" width="120" height="120"></canvas>
@@ -144,7 +145,7 @@
         renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
         document.body.appendChild(renderer.domElement);
 
-        // --- ÉCLAIRAGE NÉON AMÉLIORÉ ---
+        // --- ÉCLAIRAGE NÉON ---
         const ambientLight = new THREE.AmbientLight(0xd900ff, 1.2);
         scene.add(ambientLight);
 
@@ -173,14 +174,12 @@
         function createSynthwaveSun() {
             const sunGroup = new THREE.Group();
             
-            // Halo de fond
             const glowGeo = new THREE.CircleGeometry(45, 32);
             const glowMat = new THREE.MeshBasicMaterial({ color: 0xff007f, transparent: true, opacity: 0.25 });
             const glow = new THREE.Mesh(glowGeo, glowMat);
             glow.position.z = -2;
             sunGroup.add(glow);
 
-            // Bandes du soleil
             const bandCount = 14;
             for (let i = 0; i < bandCount; i++) {
                 const ratio = i / bandCount;
@@ -190,7 +189,6 @@
                 if (isNaN(w) || w <= 0) continue;
 
                 const bandGeo = new THREE.PlaneGeometry(w, h);
-                // Dégradé de couleur du jaune en bas au magenta en haut
                 const color = new THREE.Color().setHSL(0.9 - ratio * 0.15, 1.0, 0.5);
                 const bandMat = new THREE.MeshBasicMaterial({ color: color, side: THREE.DoubleSide });
                 
@@ -214,7 +212,6 @@
             for (let i = 0; i < pos.count; i++) {
                 const vx = pos.getX(i);
                 const vy = pos.getY(i);
-                // Génération du relief escarpé
                 const distFromCenter = Math.abs(vx) / (width / 2);
                 const heightFactor = Math.sin(vy * 0.05) * Math.cos(vx * 0.1) * 35 + Math.random() * 8;
                 pos.setZ(i, Math.max(0, heightFactor * (1 - distFromCenter * 0.3)));
@@ -312,7 +309,7 @@
             createNeonArch(z);
         }
 
-        // --- PALMIERS & CACTUS NÉON PARALLÈLES ---
+        // --- PALMIERS & CACTUS NÉON ---
         const sceneryObjects = [];
 
         function createNeonPalm(side, baseZ) {
@@ -320,13 +317,11 @@
             const trunkMat = new THREE.MeshBasicMaterial({ color: 0xff00aa, wireframe: true });
             const leafMat = new THREE.MeshBasicMaterial({ color: 0x00ffff, wireframe: true });
 
-            // Tronc
             const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.6, 9, 7), trunkMat);
             trunk.position.y = 4.5;
             trunk.rotation.z = side * -0.15;
             group.add(trunk);
 
-            // Feuilles
             for (let i = 0; i < 5; i++) {
                 const leaf = new THREE.Mesh(new THREE.BoxGeometry(4.5, 0.1, 1.2), leafMat);
                 leaf.position.set(0, 8.8, 0);
@@ -336,7 +331,7 @@
             }
 
             scene.add(group);
-            sceneryObjects.push({ mesh: group, side: side, baseZ: baseZ, type: 'palm' });
+            sceneryObjects.push({ mesh: group, side: side, baseZ: baseZ });
         }
 
         function createNeonCactus(side, baseZ) {
@@ -365,10 +360,9 @@
             group.add(arm2Up);
 
             scene.add(group);
-            sceneryObjects.push({ mesh: group, side: side, baseZ: baseZ, type: 'cactus' });
+            sceneryObjects.push({ mesh: group, side: side, baseZ: baseZ });
         }
 
-        // Alternance Palmiers / Cactus
         for (let z = 50; z > -550; z -= 35) {
             if (Math.random() > 0.4) {
                 createNeonPalm(-1, z);
@@ -417,7 +411,7 @@
         let isPaused = false;
         let score = 2450;
         let lives = 3;
-        let progress = 45;
+        let fuel = 100; // Fuel à 100%
         let isGameOver = false;
         let targetX = 0;
         let invulnerable = false;
@@ -462,15 +456,29 @@
             scene.add(can);
             fuelCans.push({ mesh: can, relativeX: relativeX, z: baseZ });
         }
-        setInterval(spawnFuelCan, 4500);
+        setInterval(spawnFuelCan, 3500);
 
         function updateHUD() {
             document.getElementById('score').textContent = String(Math.floor(score)).padStart(6, '0');
             document.getElementById('lives').textContent = '♥ '.repeat(Math.max(0, lives)).trim();
             
-            const displayProg = Math.min(100, Math.max(0, Math.floor(progress)));
-            document.getElementById('progressText').textContent = displayProg + '%';
-            document.getElementById('progressBar').style.width = displayProg + '%';
+            const displayFuel = Math.min(100, Math.max(0, Math.floor(fuel)));
+            document.getElementById('fuelText').textContent = displayFuel + '%';
+            
+            const fuelBar = document.getElementById('fuelBar');
+            fuelBar.style.width = displayFuel + '%';
+
+            // Couleur dynamique de la barre de carburant
+            if (displayFuel > 50) {
+                fuelBar.style.backgroundColor = '#00ff66';
+                fuelBar.style.boxShadow = '0 0 12px #00ff66';
+            } else if (displayFuel > 25) {
+                fuelBar.style.backgroundColor = '#ffaa00';
+                fuelBar.style.boxShadow = '0 0 12px #ffaa00';
+            } else {
+                fuelBar.style.backgroundColor = '#ff0055';
+                fuelBar.style.boxShadow = '0 0 12px #ff0055';
+            }
         }
         updateHUD();
 
@@ -542,7 +550,7 @@
 
             score = 0;
             lives = 3;
-            progress = 0;
+            fuel = 100;
             targetX = 0;
             currentCurvature = 0;
             targetCurvature = 0;
@@ -627,6 +635,18 @@
                 return;
             }
 
+            // Consommation continue du carburant
+            fuel -= 0.08;
+            if (fuel <= 0) {
+                fuel = 0;
+                updateHUD();
+                triggerGameOver("PANNE D'ESSENCE !");
+                return;
+            }
+
+            // Augmentation du score avec le temps
+            score += 0.5;
+
             // Gestion des virages
             curveTimer--;
             if (curveTimer <= 0) {
@@ -641,7 +661,7 @@
 
             updateRoadMesh();
 
-            // Mettre à jour les éléments de décor (Palmiers / Cactus)
+            // Décors
             sceneryObjects.forEach(obj => {
                 obj.baseZ += speed;
                 if (obj.baseZ > 50) obj.baseZ -= 600;
@@ -651,7 +671,7 @@
                 obj.mesh.position.set(posX, 0, obj.baseZ);
             });
 
-            // Mettre à jour les arches néon
+            // Arches néon
             arches.forEach(a => {
                 a.baseZ += speed;
                 if (a.baseZ > 50) a.baseZ -= 500;
@@ -660,7 +680,7 @@
                 a.mesh.position.set(offsetX, 0, a.baseZ);
             });
 
-            // Mettre à jour les pointillés
+            // Pointillés
             dashes.forEach(d => {
                 d.baseZ += speed;
                 if (d.baseZ > 50) d.baseZ -= 600;
@@ -680,17 +700,9 @@
             carGroup.position.x += (targetX - carGroup.position.x) * 0.1 + curveForce;
             carGroup.rotation.z = (carGroup.position.x - targetX) * 0.05 - currentCurvature * 0.15;
 
-            // Progression
-            progress += 0.03;
-            if (progress >= 100) {
-                progress = 100;
-                updateHUD();
-                triggerGameOver("VICTOIRE ! COURSE TERMINÉE !");
-                return;
-            }
             updateHUD();
 
-            // Gestion jerricans jaunes
+            // Collision Jerricans Jaunes -> Recharge à 100%
             for (let i = fuelCans.length - 1; i >= 0; i--) {
                 const can = fuelCans[i];
                 can.z += speed;
@@ -703,6 +715,7 @@
                 const dz = Math.abs(carGroup.position.z - can.z);
 
                 if (dx < 1.8 && dz < 2.0) {
+                    fuel = 100; // Plein d'essence effectué
                     score += 200;
                     updateHUD();
                     scene.remove(can.mesh);
@@ -716,7 +729,7 @@
                 }
             }
 
-            // Gestion obstacles
+            // Collision Obstacles
             for (let i = obstacles.length - 1; i >= 0; i--) {
                 const obs = obstacles[i];
                 obs.z += speed;
