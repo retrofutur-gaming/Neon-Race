@@ -204,47 +204,28 @@
         floor.position.set(0, -0.2, -200);
         scene.add(floor);
 
-        // --- ROUTE SINUEUSE AVEC COURBE ---
-        const roadSegments = 200;
+        // --- ROUTE DROITE ---
         const roadWidth = 14;
-        const roadCurvePoints = [];
-
-        for (let i = 0; i <= roadSegments; i++) {
-            const z = -i * 2.5;
-            const x = Math.sin(i * 0.08) * 12;
-            roadCurvePoints.push(new THREE.Vector3(x, 0, z));
-        }
-
-        const curve = new THREE.CatmullRomCurve3(roadCurvePoints);
-        const roadGeo = new THREE.PlaneGeometry(roadWidth, 500, 1, roadSegments);
+        const roadLength = 500;
         
-        // Incurver la route le long des points
-        const pos = roadGeo.attributes.position;
-        for (let i = 0; i < pos.count; i++) {
-            const zIdx = Math.floor(i / 2);
-            const t = zIdx / roadSegments;
-            const pt = curve.getPoint(t);
-            pos.setX(i, pos.getX(i) + pt.x);
-        }
-        roadGeo.computeVertexNormals();
-
+        const roadGeo = new THREE.PlaneGeometry(roadWidth, roadLength, 1, 50);
         const roadMat = new THREE.MeshBasicMaterial({ color: 0x0a0015, side: THREE.DoubleSide });
         const road = new THREE.Mesh(roadGeo, roadMat);
         road.rotation.x = -Math.PI / 2;
-        road.position.set(0, 0.01, 0);
+        road.position.set(0, 0.01, -200);
         scene.add(road);
 
-        // Bordures violettes lumineuses
+        // Bordures violettes lumineuses droites
         const railMat = new THREE.LineBasicMaterial({ color: 0xff00ff, linewidth: 3 });
-        const leftRailPoints = [];
-        const rightRailPoints = [];
-
-        for (let i = 0; i <= roadSegments; i++) {
-            const t = i / roadSegments;
-            const pt = curve.getPoint(t);
-            leftRailPoints.push(new THREE.Vector3(pt.x - roadWidth / 2, 0.2, pt.z));
-            rightRailPoints.push(new THREE.Vector3(pt.x + roadWidth / 2, 0.2, pt.z));
-        }
+        
+        const leftRailPoints = [
+            new THREE.Vector3(-roadWidth / 2, 0.2, 50),
+            new THREE.Vector3(-roadWidth / 2, 0.2, -450)
+        ];
+        const rightRailPoints = [
+            new THREE.Vector3(roadWidth / 2, 0.2, 50),
+            new THREE.Vector3(roadWidth / 2, 0.2, -450)
+        ];
 
         const leftRail = new THREE.Line(new THREE.BufferGeometry().setFromPoints(leftRailPoints), railMat);
         const rightRail = new THREE.Line(new THREE.BufferGeometry().setFromPoints(rightRailPoints), railMat);
@@ -353,7 +334,8 @@
 
         function createFuelCanMesh() {
             const group = new THREE.Group();
-            const mat = new THREE.MeshBasicMaterial({ color: 0x00ffff });
+            // Changement de la couleur du jerrican en jaune néon (0xffff00)
+            const mat = new THREE.MeshBasicMaterial({ color: 0xffff00 });
             
             const body = new THREE.Mesh(new THREE.BoxGeometry(1.2, 1.6, 0.8), mat);
             group.add(body);
@@ -392,16 +374,12 @@
         function drawMinimap() {
             mapCtx.clearRect(0, 0, 110, 110);
             
-            // Ligne de route sinueuse sur la carte
+            // Ligne de route droite sur la carte
             mapCtx.strokeStyle = '#00ffff';
             mapCtx.lineWidth = 3;
             mapCtx.beginPath();
-            for (let i = 0; i < 100; i += 5) {
-                const mapY = 100 - i;
-                const mapX = 55 + Math.sin(i * 0.1) * 15;
-                if (i === 0) mapCtx.moveTo(mapX, mapY);
-                else mapCtx.lineTo(mapX, mapY);
-            }
+            mapCtx.moveTo(55, 10);
+            mapCtx.lineTo(55, 100);
             mapCtx.stroke();
 
             // Position de la voiture
