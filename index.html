@@ -135,7 +135,7 @@
     <script>
         // --- SCÈNE 3D ---
         const scene = new THREE.Scene();
-        scene.fog = new THREE.FogExp2(0x130024, 0.006);
+        scene.fog = new THREE.FogExp2(0x110022, 0.005);
 
         const camera = new THREE.PerspectiveCamera(65, window.innerWidth / window.innerHeight, 0.1, 1000);
         
@@ -144,59 +144,96 @@
         renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
         document.body.appendChild(renderer.domElement);
 
-        // --- ÉCLAIRAGE NÉON ---
-        const ambientLight = new THREE.AmbientLight(0xd900ff, 0.9);
+        // --- ÉCLAIRAGE NÉON AMÉLIORÉ ---
+        const ambientLight = new THREE.AmbientLight(0xd900ff, 1.2);
         scene.add(ambientLight);
 
-        const dirLight = new THREE.DirectionalLight(0x00ffff, 1.5);
-        dirLight.position.set(0, 40, -100);
+        const dirLight = new THREE.DirectionalLight(0x00ffff, 2.0);
+        dirLight.position.set(0, 50, -100);
         scene.add(dirLight);
 
-        // --- CIEL ÉTOILÉ ---
+        const magentaLight = new THREE.PointLight(0xff00ff, 3, 100);
+        magentaLight.position.set(0, 10, -30);
+        scene.add(magentaLight);
+
+        // --- CIEL ÉTOILÉ DENSE ---
         const starsGeo = new THREE.BufferGeometry();
-        const starsCount = 700;
+        const starsCount = 1000;
         const starPos = new Float32Array(starsCount * 3);
         for(let i = 0; i < starsCount * 3; i += 3) {
-            starPos[i] = (Math.random() - 0.5) * 600;
-            starPos[i+1] = Math.random() * 140 + 5;
-            starPos[i+2] = -Math.random() * 300 - 20;
+            starPos[i] = (Math.random() - 0.5) * 800;
+            starPos[i+1] = Math.random() * 180 + 5;
+            starPos[i+2] = -Math.random() * 400 - 20;
         }
         starsGeo.setAttribute('position', new THREE.BufferAttribute(starPos, 3));
-        const starsMat = new THREE.PointsMaterial({ color: 0xffffff, size: 0.8 });
+        const starsMat = new THREE.PointsMaterial({ color: 0xffffff, size: 0.9, transparent: true, opacity: 0.8 });
         scene.add(new THREE.Points(starsGeo, starsMat));
 
-        // --- PLANÈTE / SOLEIL SYNTHWAVE ---
-        const planetGeo = new THREE.SphereGeometry(32, 32, 32);
-        const planetMat = new THREE.MeshBasicMaterial({ color: 0xaa00ff, wireframe: true });
-        const planet = new THREE.Mesh(planetGeo, planetMat);
-        planet.position.set(55, 25, -200);
-        scene.add(planet);
+        // --- SOLEIL SYNTHWAVE / NÉON AVEC STRATES ---
+        function createSynthwaveSun() {
+            const sunGroup = new THREE.Group();
+            
+            // Halo de fond
+            const glowGeo = new THREE.CircleGeometry(45, 32);
+            const glowMat = new THREE.MeshBasicMaterial({ color: 0xff007f, transparent: true, opacity: 0.25 });
+            const glow = new THREE.Mesh(glowGeo, glowMat);
+            glow.position.z = -2;
+            sunGroup.add(glow);
 
-        // --- MONTAGNES SYNTHWAVE ---
-        function createMountainGroup(x, z, radius, height) {
-            const group = new THREE.Group();
-            const geo = new THREE.ConeGeometry(radius, height, 6);
-            const mat = new THREE.MeshBasicMaterial({ color: 0x220044, wireframe: true });
-            const mtn = new THREE.Mesh(geo, mat);
-            group.add(mtn);
+            // Bandes du soleil
+            const bandCount = 14;
+            for (let i = 0; i < bandCount; i++) {
+                const ratio = i / bandCount;
+                const h = 2.2 * (1 - ratio * 0.5);
+                const w = Math.sqrt(1 - Math.pow((ratio * 2 - 1), 2)) * 75;
+                
+                if (isNaN(w) || w <= 0) continue;
 
-            const topGeo = new THREE.ConeGeometry(radius * 0.45, height * 0.45, 6);
-            const topMat = new THREE.MeshBasicMaterial({ color: 0x00ffff, wireframe: true });
-            const topMtn = new THREE.Mesh(topGeo, topMat);
-            topMtn.position.y = height * 0.28;
-            group.add(topMtn);
+                const bandGeo = new THREE.PlaneGeometry(w, h);
+                // Dégradé de couleur du jaune en bas au magenta en haut
+                const color = new THREE.Color().setHSL(0.9 - ratio * 0.15, 1.0, 0.5);
+                const bandMat = new THREE.MeshBasicMaterial({ color: color, side: THREE.DoubleSide });
+                
+                const band = new THREE.Mesh(bandGeo, bandMat);
+                band.position.set(0, (i - bandCount / 2) * 2.8, 0);
+                sunGroup.add(band);
+            }
 
-            group.position.set(x, height / 2, z);
-            scene.add(group);
+            sunGroup.position.set(40, 25, -280);
+            return sunGroup;
+        }
+        scene.add(createSynthwaveSun());
+
+        // --- MONTAGNES EN RELIEF LOW-POLY NÉON ---
+        function createMountainChain(sideX) {
+            const width = 250;
+            const length = 600;
+            const geo = new THREE.PlaneGeometry(width, length, 16, 30);
+            
+            const pos = geo.attributes.position;
+            for (let i = 0; i < pos.count; i++) {
+                const vx = pos.getX(i);
+                const vy = pos.getY(i);
+                // Génération du relief escarpé
+                const distFromCenter = Math.abs(vx) / (width / 2);
+                const heightFactor = Math.sin(vy * 0.05) * Math.cos(vx * 0.1) * 35 + Math.random() * 8;
+                pos.setZ(i, Math.max(0, heightFactor * (1 - distFromCenter * 0.3)));
+            }
+            geo.computeVertexNormals();
+
+            const matWire = new THREE.MeshBasicMaterial({ color: 0xff00ff, wireframe: true });
+            const mesh = new THREE.Mesh(geo, matWire);
+            mesh.rotation.x = -Math.PI / 2;
+            mesh.position.set(sideX, 0, -250);
+            scene.add(mesh);
         }
 
-        createMountainGroup(-100, -170, 40, 65);
-        createMountainGroup(-50, -200, 50, 80);
-        createMountainGroup(110, -180, 45, 70);
+        createMountainChain(-180);
+        createMountainChain(180);
 
-        // --- SOL ET GRILLE NÉON ---
-        const floorGeo = new THREE.PlaneGeometry(500, 600, 50, 60);
-        const floorMat = new THREE.MeshBasicMaterial({ color: 0x180033, wireframe: true });
+        // --- SOL ET GRILLE PERSPECTIVE NÉON ---
+        const floorGeo = new THREE.PlaneGeometry(600, 700, 60, 70);
+        const floorMat = new THREE.MeshBasicMaterial({ color: 0x220044, wireframe: true });
         const floor = new THREE.Mesh(floorGeo, floorMat);
         floor.rotation.x = -Math.PI / 2;
         floor.position.set(0, -0.2, -250);
@@ -206,30 +243,28 @@
         const roadWidth = 16;
         const roadSegments = 120;
         const segmentLength = 5;
-        const totalRoadLength = roadSegments * segmentLength; // 600 units
+        const totalRoadLength = roadSegments * segmentLength;
 
         const roadGeo = new THREE.PlaneGeometry(roadWidth, totalRoadLength, 1, roadSegments);
-        const roadMat = new THREE.MeshBasicMaterial({ color: 0x0b0018, side: THREE.DoubleSide });
+        const roadMat = new THREE.MeshBasicMaterial({ color: 0x090014, side: THREE.DoubleSide });
         const road = new THREE.Mesh(roadGeo, roadMat);
         road.rotation.x = -Math.PI / 2;
         road.position.set(0, 0.01, -totalRoadLength / 2 + 50);
         scene.add(road);
 
-        // Structure pour calculer la courbure dynamique
         let currentCurvature = 0;
         let targetCurvature = 0;
         let curveTimer = 0;
 
         function getRoadOffsetX(z) {
-            // Calcule le décalage X selon la distance Z par rapport à la voiture (z = -8)
             const dist = Math.max(0, -8 - z);
             return currentCurvature * Math.pow(dist / 100, 2) * 15;
         }
 
-        // Rail de sécurité
+        // Rails de sécurité lumineux avec barrières
         const leftRailGeo = new THREE.BufferGeometry();
         const rightRailGeo = new THREE.BufferGeometry();
-        const railMat = new THREE.LineBasicMaterial({ color: 0xff00ff, linewidth: 4 });
+        const railMat = new THREE.LineBasicMaterial({ color: 0xff00aa, linewidth: 5 });
 
         const railPointsLeft = new Float32Array((roadSegments + 1) * 3);
         const railPointsRight = new Float32Array((roadSegments + 1) * 3);
@@ -242,11 +277,11 @@
         scene.add(leftRail);
         scene.add(rightRail);
 
-        // Pointillés centraux (double ligne)
+        // Pointillés centraux néon
         const dashGroup = new THREE.Group();
         const dashes = [];
         for (let z = 50; z > -550; z -= 12) {
-            const lineGeo = new THREE.BoxGeometry(0.3, 0.02, 6);
+            const lineGeo = new THREE.BoxGeometry(0.35, 0.04, 6);
             const lineMat = new THREE.MeshBasicMaterial({ color: 0x00ffff });
             
             const lineLeft = new THREE.Mesh(lineGeo, lineMat);
@@ -258,39 +293,90 @@
         }
         scene.add(dashGroup);
 
-        // --- CACTUS STYLE SAGUARO ---
-        const cacti = [];
+        // --- ARCHES NÉON AU-DESSUS DE LA ROUTE ---
+        const arches = [];
+        function createNeonArch(baseZ) {
+            const group = new THREE.Group();
+            const mat = new THREE.MeshBasicMaterial({ color: 0x00ffff, wireframe: true });
+
+            const archGeo = new THREE.TorusGeometry(12, 0.3, 8, 18, Math.PI);
+            const mesh = new THREE.Mesh(archGeo, mat);
+            mesh.position.y = 0;
+            group.add(mesh);
+
+            scene.add(group);
+            arches.push({ mesh: group, baseZ: baseZ });
+        }
+
+        for (let z = -50; z > -550; z -= 120) {
+            createNeonArch(z);
+        }
+
+        // --- PALMIERS & CACTUS NÉON PARALLÈLES ---
+        const sceneryObjects = [];
+
+        function createNeonPalm(side, baseZ) {
+            const group = new THREE.Group();
+            const trunkMat = new THREE.MeshBasicMaterial({ color: 0xff00aa, wireframe: true });
+            const leafMat = new THREE.MeshBasicMaterial({ color: 0x00ffff, wireframe: true });
+
+            // Tronc
+            const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.6, 9, 7), trunkMat);
+            trunk.position.y = 4.5;
+            trunk.rotation.z = side * -0.15;
+            group.add(trunk);
+
+            // Feuilles
+            for (let i = 0; i < 5; i++) {
+                const leaf = new THREE.Mesh(new THREE.BoxGeometry(4.5, 0.1, 1.2), leafMat);
+                leaf.position.set(0, 8.8, 0);
+                leaf.rotation.y = (i * Math.PI) / 2.5;
+                leaf.rotation.z = side * 0.3;
+                group.add(leaf);
+            }
+
+            scene.add(group);
+            sceneryObjects.push({ mesh: group, side: side, baseZ: baseZ, type: 'palm' });
+        }
+
         function createNeonCactus(side, baseZ) {
             const group = new THREE.Group();
             const matViolet = new THREE.MeshBasicMaterial({ color: 0xcc00ff, wireframe: true });
             const matCyan = new THREE.MeshBasicMaterial({ color: 0x00ffff, wireframe: true });
             
             const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.5, 7, 8), matViolet);
+            trunk.position.y = 3.5;
             group.add(trunk);
 
             const arm1 = new THREE.Mesh(new THREE.BoxGeometry(2.5, 0.4, 0.4), matCyan);
-            arm1.position.set(1.1, 1.2, 0);
+            arm1.position.set(1.1, 4.7, 0);
             group.add(arm1);
 
             const arm1Up = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.35, 2.5, 8), matCyan);
-            arm1Up.position.set(2.1, 2.2, 0);
+            arm1Up.position.set(2.1, 5.7, 0);
             group.add(arm1Up);
 
             const arm2 = new THREE.Mesh(new THREE.BoxGeometry(2.5, 0.4, 0.4), matCyan);
-            arm2.position.set(-1.1, 0.2, 0);
+            arm2.position.set(-1.1, 3.7, 0);
             group.add(arm2);
 
             const arm2Up = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.35, 2.5, 8), matCyan);
-            arm2Up.position.set(-2.1, 1.2, 0);
+            arm2Up.position.set(-2.1, 4.7, 0);
             group.add(arm2Up);
 
             scene.add(group);
-            cacti.push({ mesh: group, side: side, baseZ: baseZ });
+            sceneryObjects.push({ mesh: group, side: side, baseZ: baseZ, type: 'cactus' });
         }
 
-        for (let z = 50; z > -550; z -= 30) {
-            createNeonCactus(-1, z);
-            createNeonCactus(1, z);
+        // Alternance Palmiers / Cactus
+        for (let z = 50; z > -550; z -= 35) {
+            if (Math.random() > 0.4) {
+                createNeonPalm(-1, z);
+                createNeonCactus(1, z);
+            } else {
+                createNeonCactus(-1, z);
+                createNeonPalm(1, z);
+            }
         }
 
         // --- VOITURE STYLE DELOREAN ---
@@ -390,12 +476,13 @@
 
         // --- MINI MAP ---
         const mapCanvas = document.getElementById('minimap');
+        mapCanvas.width = 120;
+        mapCanvas.height = 120;
         const mapCtx = mapCanvas.getContext('2d');
 
         function drawMinimap() {
             mapCtx.clearRect(0, 0, 120, 120);
             
-            // Dessin de la route incurvée
             mapCtx.strokeStyle = '#00ffff';
             mapCtx.lineWidth = 3;
             mapCtx.beginPath();
@@ -405,7 +492,6 @@
             mapCtx.quadraticCurveTo(60, 60, 60 + curveOffset, 10);
             mapCtx.stroke();
 
-            // Voiture
             const carMapX = 60 + carGroup.position.x * 2.5;
             mapCtx.fillStyle = '#ff007f';
             mapCtx.beginPath();
@@ -512,7 +598,6 @@
         const speed = 2.4;
 
         function updateRoadMesh() {
-            // Mettre à jour la géométrie de la route
             const posAttr = roadGeo.attributes.position;
             const lPos = leftRailGeo.attributes.position;
             const rPos = rightRailGeo.attributes.position;
@@ -521,11 +606,9 @@
                 const z = 50 - i * segmentLength;
                 const offsetX = getRoadOffsetX(z);
 
-                // Décalage plan de route
                 posAttr.setX(i * 2, -roadWidth / 2 + offsetX);
                 posAttr.setX(i * 2 + 1, roadWidth / 2 + offsetX);
 
-                // Décalage rails
                 lPos.setXYZ(i, -roadWidth / 2 + offsetX, 0.3, z);
                 rPos.setXYZ(i, roadWidth / 2 + offsetX, 0.3, z);
             }
@@ -544,11 +627,10 @@
                 return;
             }
 
-            // Gestion aléatoire des virages
+            // Gestion des virages
             curveTimer--;
             if (curveTimer <= 0) {
                 curveTimer = Math.floor(Math.random() * 150) + 100;
-                // Alternance entre virages (-1, 1) et lignes droites (0)
                 if (targetCurvature !== 0) {
                     targetCurvature = 0;
                 } else {
@@ -557,17 +639,25 @@
             }
             currentCurvature += (targetCurvature - currentCurvature) * 0.015;
 
-            // Mettre à jour la courbure globale de la route
             updateRoadMesh();
 
-            // Mettre à jour les cactus
-            cacti.forEach(c => {
-                c.baseZ += speed;
-                if (c.baseZ > 50) c.baseZ -= 600;
+            // Mettre à jour les éléments de décor (Palmiers / Cactus)
+            sceneryObjects.forEach(obj => {
+                obj.baseZ += speed;
+                if (obj.baseZ > 50) obj.baseZ -= 600;
 
-                const offsetX = getRoadOffsetX(c.baseZ);
-                const posX = (c.side * (roadWidth / 2 + 6)) + offsetX;
-                c.mesh.position.set(posX, 3.5, c.baseZ);
+                const offsetX = getRoadOffsetX(obj.baseZ);
+                const posX = (obj.side * (roadWidth / 2 + 7)) + offsetX;
+                obj.mesh.position.set(posX, 0, obj.baseZ);
+            });
+
+            // Mettre à jour les arches néon
+            arches.forEach(a => {
+                a.baseZ += speed;
+                if (a.baseZ > 50) a.baseZ -= 500;
+
+                const offsetX = getRoadOffsetX(a.baseZ);
+                a.mesh.position.set(offsetX, 0, a.baseZ);
             });
 
             // Mettre à jour les pointillés
@@ -580,13 +670,12 @@
                 d.right.position.set(0.5 + offsetX, 0.05, d.baseZ);
             });
 
-            // Contrôles joueur
+            // Contrôles véhicule
             if (keys.ArrowLeft) targetX -= 0.45;
             if (keys.ArrowRight) targetX += 0.45;
 
             targetX = Math.max(-6.5, Math.min(6.5, targetX));
             
-            // Force centrifuge appliquée au véhicule selon le virage
             const curveForce = -currentCurvature * 0.12;
             carGroup.position.x += (targetX - carGroup.position.x) * 0.1 + curveForce;
             carGroup.rotation.z = (carGroup.position.x - targetX) * 0.05 - currentCurvature * 0.15;
