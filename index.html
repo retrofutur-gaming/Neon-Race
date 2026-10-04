@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>Synthwave Drive</title>
+    <title>Neon Race</title>
     <style>
         body {
             margin: 0;
@@ -44,7 +44,7 @@
 </head>
 <body>
 
-    <button id="permissionBtn">Activer le Gyroscope</button>
+    <button id="permissionBtn">Activer le Gyroscope (Mobile)</button>
     <div id="hud">SCORE: <span id="score">0</span></div>
     <canvas id="gameCanvas"></canvas>
 
@@ -60,7 +60,158 @@
         let score = 0;
         let gameOver = false;
 
-        // Position de la voiture
+        // Contrôles clavier
+        const keys = {
+            ArrowLeft: false,
+            ArrowRight: false
+        };
+
+        // Voiture
+        const car = {
+            x: canvas.width / 2 - 20,
+            y: canvas.height - 120,
+            width: 40,
+            height: 70,
+            speedX: 0
+        };
+
+        // Obstacles
+        const obstacles = [];
+
+        function spawnObstacle() {
+            if (gameOver) return;
+            const size = Math.random() * 20 + 20;
+            obstacles.push({
+                x: Math.random() * (canvas.width - size),
+                y: -size,
+                width: size,
+                height: size,
+                speedY: Math.random() * 3 + 4
+            });
+        }
+        setInterval(spawnObstacle, 1200);
+
+        // Événements Clavier (Flèches)
+        window.addEventListener('keydown', (e) => {
+            if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+                keys[e.key] = true;
+            }
+        });
+
+        window.addEventListener('keyup', (e) => {
+            if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+                keys[e.key] = false;
+            }
+        });
+
+        // Demande d'autorisation Gyroscope
+        btn.addEventListener('click', () => {
+            if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+                DeviceOrientationEvent.requestPermission()
+                    .then(response => {
+                        if (response === 'granted') {
+                            window.addEventListener('deviceorientation', handleOrientation);
+                            btn.style.display = 'none';
+                        } else {
+                            alert('Permission refusée.');
+                        }
+                    })
+                    .catch(console.error);
+            } else {
+                window.addEventListener('deviceorientation', handleOrientation);
+                btn.style.display = 'none';
+            }
+        });
+
+        function handleOrientation(event) {
+            let tilt = event.gamma; 
+            if (tilt !== null) {
+                car.speedX = tilt * 0.4;
+            }
+        }
+
+        function update() {
+            if (gameOver) return;
+
+            // Déplacement au clavier (prioritaire si une touche est pressée)
+            const keyboardSpeed = 7;
+            if (keys.ArrowLeft) {
+                car.x -= keyboardSpeed;
+            } else if (keys.ArrowRight) {
+                car.x += keyboardSpeed;
+            } else {
+                // Déplacement au gyroscope si aucune touche clavier n'est pressée
+                car.x += car.speedX;
+            }
+
+            // Limites de l'écran
+            if (car.x < 0) car.x = 0;
+            if (car.x + car.width > canvas.width) car.x = canvas.width - car.width;
+
+            // Déplacement obstacles & collisions
+            for (let i = obstacles.length - 1; i >= 0; i--) {
+                const obs = obstacles[i];
+                obs.y += obs.speedY;
+
+                if (
+                    car.x < obs.x + obs.width &&
+                    car.x + car.width > obs.x &&
+                    car.y < obs.y + obs.height &&
+                    car.y + car.height > obs.y
+                ) {
+                    gameOver = true;
+                    alert(`GAME OVER ! Score final : ${score}`);
+                    document.location.reload();
+                }
+
+                if (obs.y > canvas.height) {
+                    obstacles.splice(i, 1);
+                    score += 10;
+                    scoreEl.textContent = score;
+                }
+            }
+        }
+
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Soleil Synthwave
+            ctx.fillStyle = '#ff007f';
+            ctx.beginPath();
+            ctx.arc(canvas.width / 2, canvas.height / 3, 60, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Route
+            ctx.strokeStyle = '#9900ff';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(canvas.width / 2 - 20, canvas.height / 3);
+            ctx.lineTo(0, canvas.height);
+            ctx.moveTo(canvas.width / 2 + 20, canvas.height / 3);
+            ctx.lineTo(canvas.width, canvas.height);
+            ctx.stroke();
+
+            // Obstacles
+            ctx.fillStyle = '#00ffff';
+            obstacles.forEach(obs => {
+                ctx.fillRect(obs.x, obs.y, obs.width, obs.height);
+            });
+
+            // Voiture
+            ctx.fillStyle = '#ff0055';
+            ctx.shadowBlur = 10;
+            ctx.shadowColor = '#ff0055';
+            ctx.fillRect(car.x, car.y, car.width, car.height);
+            ctx.shadowBlur = 0;
+
+            update();
+            requestAnimationFrame(draw);
+        }
+
+        draw();
+    </script>
+</body>
+</html>        // Position de la voiture
         const car = {
             x: canvas.width / 2 - 20,
             y: canvas.height - 120,
