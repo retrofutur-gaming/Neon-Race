@@ -78,6 +78,7 @@
     <div id="hud">
         SCORE: <span id="score">002450</span><br>
         LIVES: <span id="lives" class="hearts">♥♥♥</span><br>
+        PROGRESS: <span id="progressText">0%</span><br>
         FUEL: <span id="fuelText">100%</span>
         <div id="fuelContainer"><div id="fuelBar"></div></div>
     </div>
@@ -130,50 +131,42 @@
         createMountain(-40, -180, 55);
         createMountain(110, -170, 50);
 
-        // --- TRACÉ DE LA ROUTE ---
-        const curve = new THREE.CatmullRomCurve3([
-            new THREE.Vector3(0, 0, 20),
-            new THREE.Vector3(-5, 0, -50),
-            new THREE.Vector3(15, 0, -120),
-            new THREE.Vector3(-10, 0, -200),
-            new THREE.Vector3(20, 0, -300),
-            new THREE.Vector3(0, 0, -400)
-        ]);
-
-        const roadGeo = new THREE.TubeGeometry(curve, 100, 7, 2, false);
-        const roadMat = new THREE.MeshBasicMaterial({ color: 0x110022, wireframe: false });
+        // --- ROUTE DROITE ET GOUDRON NOIR ---
+        const roadWidth = 14;
+        const roadLength = 500;
+        const roadGeo = new THREE.PlaneGeometry(roadWidth, roadLength);
+        const roadMat = new THREE.MeshBasicMaterial({ color: 0x050505, side: THREE.DoubleSide });
         const road = new THREE.Mesh(roadGeo, roadMat);
-        road.scale.set(1, 0.02, 1);
+        road.rotation.x = -Math.PI / 2;
+        road.position.set(0, 0, -roadLength / 2 + 20);
         scene.add(road);
 
-        // Ligne jaune centrale
-        const centerRoadGeo = new THREE.TubeGeometry(curve, 100, 0.6, 2, false);
-        const centerRoadMat = new THREE.MeshBasicMaterial({ color: 0xffcc00 });
-        const centerLine = new THREE.Mesh(centerRoadGeo, centerRoadMat);
-        centerLine.scale.set(1, 0.03, 1);
-        centerLine.position.y = 0.15;
-        scene.add(centerLine);
+        // --- DOUBLE LIGNE VIOLETTE CENTRALE ---
+        const lineMat = new THREE.MeshBasicMaterial({ color: 0xaa00ff }); // Violet néon
 
-        // Barrières cyan
-        const points = curve.getPoints(100);
-        const leftRailPoints = [];
-        const rightRailPoints = [];
+        // Ligne gauche
+        const leftLineGeo = new THREE.PlaneGeometry(0.3, roadLength);
+        const leftLine = new THREE.Mesh(leftLineGeo, lineMat);
+        leftLine.rotation.x = -Math.PI / 2;
+        leftLine.position.set(-0.35, 0.05, -roadLength / 2 + 20);
+        scene.add(leftLine);
 
-        points.forEach((pt, i) => {
-            const tangent = curve.getTangent(i / 100).normalize();
-            const normal = new THREE.Vector3(-tangent.z, 0, tangent.x);
-            leftRailPoints.push(pt.clone().add(normal.clone().multiplyScalar(7)));
-            rightRailPoints.push(pt.clone().add(normal.clone().multiplyScalar(-7)));
-        });
+        // Ligne droite
+        const rightLineGeo = new THREE.PlaneGeometry(0.3, roadLength);
+        const rightLine = new THREE.Mesh(rightLineGeo, lineMat);
+        rightLine.rotation.x = -Math.PI / 2;
+        rightLine.position.set(0.35, 0.05, -roadLength / 2 + 20);
+        scene.add(rightLine);
 
-        const leftMat = new THREE.LineBasicMaterial({ color: 0x00ffff, linewidth: 4 });
-        const rightMat = new THREE.LineBasicMaterial({ color: 0x00ffff, linewidth: 4 });
-
-        const leftRail = new THREE.Line(new THREE.BufferGeometry().setFromPoints(leftRailPoints), leftMat);
-        const rightRail = new THREE.Line(new THREE.BufferGeometry().setFromPoints(rightRailPoints), rightMat);
-        leftRail.position.y = 0.3;
-        rightRail.position.y = 0.3;
+        // Barrières cyan sur les côtés
+        const railMat = new THREE.LineBasicMaterial({ color: 0x00ffff, linewidth: 4 });
+        
+        const leftRailPoints = [new THREE.Vector3(-roadWidth / 2, 0.3, 20), new THREE.Vector3(-roadWidth / 2, 0.3, -roadLength + 20)];
+        const leftRail = new THREE.Line(new THREE.BufferGeometry().setFromPoints(leftRailPoints), railMat);
         scene.add(leftRail);
+
+        const rightRailPoints = [new THREE.Vector3(roadWidth / 2, 0.3, 20), new THREE.Vector3(roadWidth / 2, 0.3, -roadLength + 20)];
+        const rightRail = new THREE.Line(new THREE.BufferGeometry().setFromPoints(rightRailPoints), railMat);
         scene.add(rightRail);
 
         // --- CACTUS ---
@@ -219,7 +212,7 @@
         camera.position.set(0, 3.5, 3);
         camera.lookAt(0, 1, -15);
 
-        // --- ETAT DU JEU ---
+        // --- ÉTAT DU JEU ---
         let gameStarted = false;
         let score = 2450;
         let lives = 3;
@@ -292,8 +285,8 @@
             mapCtx.strokeStyle = '#00ffff';
             mapCtx.lineWidth = 3;
             mapCtx.beginPath();
-            mapCtx.moveTo(20, 90);
-            mapCtx.bezierCurveTo(30, 60, 80, 40, 50, 10);
+            mapCtx.moveTo(50, 90);
+            mapCtx.lineTo(50, 10);
             mapCtx.stroke();
 
             const mapX = 50 + carGroup.position.x * 2;
@@ -306,14 +299,13 @@
         window.addEventListener('keydown', e => { if (keys.hasOwnProperty(e.key)) keys[e.key] = true; });
         window.addEventListener('keyup', e => { if (keys.hasOwnProperty(e.key)) keys[e.key] = false; });
 
-        // --- SÉCURISATION DU DÉMARRAGE ---
+        // --- DÉMARRAGE SÉCURISÉ ---
         const btn = document.getElementById('permissionBtn');
         
         function startGame() {
             btn.style.display = 'none';
             gameStarted = true;
 
-            // Tentative d'activation du gyroscope en arrière-plan sans tout bloquer
             if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
                 DeviceOrientationEvent.requestPermission().then(res => {
                     if (res === 'granted') window.addEventListener('deviceorientation', handleGyro);
@@ -324,7 +316,7 @@
         }
 
         btn.addEventListener('click', startGame);
-        btn.addEventListener('touchstart', startGame); // Prise en compte immédiate sur mobile
+        btn.addEventListener('touchstart', startGame);
 
         function handleGyro(event) {
             if (event.gamma !== null) {
@@ -352,7 +344,7 @@
             if (keys.ArrowLeft) targetX -= 0.4;
             if (keys.ArrowRight) targetX += 0.4;
 
-            targetX = Math.max(-6, Math.min(6, targetX));
+            targetX = Math.max(-5.5, Math.min(5.5, targetX));
             carGroup.position.x += (targetX - carGroup.position.x) * 0.1;
             carGroup.rotation.z = (carGroup.position.x - targetX) * 0.05;
 
