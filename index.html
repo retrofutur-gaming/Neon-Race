@@ -28,6 +28,20 @@
             color: #ff0055;
             text-shadow: 0 0 6px #ff0055;
         }
+        #fuelContainer {
+            width: 150px;
+            height: 10px;
+            border: 2px solid #ffaa00;
+            margin-top: 4px;
+            background: rgba(0,0,0,0.5);
+            box-shadow: 0 0 6px #ffaa00;
+        }
+        #fuelBar {
+            width: 100%;
+            height: 100%;
+            background: #ffaa00;
+            box-shadow: 0 0 8px #ffaa00;
+        }
         #minimap {
             position: absolute;
             bottom: 20px;
@@ -61,6 +75,375 @@
 </head>
 <body>
 
+    <div id="hud">
+        SCORE: <span id="score">002450</span><br>
+        LIVES: <span id="lives" class="hearts">♥♥♥</span><br>
+        PROGRESS: <span id="progressText">0%</span><br>
+        FUEL: <span id="fuelText">100%</span>
+        <div id="fuelContainer"><div id="fuelBar"></div></div>
+    </div>
+
+    <canvas id="minimap" width="100" height="100"></canvas>
+
+    <button id="permissionBtn">LANCER LE JEU</button>
+
+    <script>
+        // --- SCÈNE 3D ---
+        const scene = new THREE.Scene();
+        scene.fog = new THREE.FogExp2(0x0a0015, 0.008);
+
+        const camera = new THREE.PerspectiveCamera(65, window.innerWidth / window.innerHeight, 0.1, 1000);
+        
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        document.body.appendChild(renderer.domElement);
+
+        // --- CIEL ÉTOILÉ ---
+        const starsGeo = new THREE.BufferGeometry();
+        const starsCount = 400;
+        const starPos = new Float32Array(starsCount * 3);
+        for(let i=0; i<starsCount*3; i+=3) {
+            starPos[i] = (Math.random() - 0.5) * 400;
+            starPos[i+1] = Math.random() * 100 + 10;
+            starPos[i+2] = -Math.random() * 200 - 50;
+        }
+        starsGeo.setAttribute('position', new THREE.BufferAttribute(starPos, 3));
+        const starsMat = new THREE.PointsMaterial({ color: 0xffffff, size: 0.8 });
+        scene.add(new THREE.Points(starsGeo, starsMat));
+
+        // --- PLANÈTE VIOLETTE ---
+        const planetGeo = new THREE.SphereGeometry(35, 32, 32);
+        const planetMat = new THREE.MeshBasicMaterial({ color: 0x8a2be2, wireframe: true });
+        const planet = new THREE.Mesh(planetGeo, planetMat);
+        planet.position.set(60, 25, -180);
+        scene.add(planet);
+
+        // --- MONTAGNES NÉON ---
+        function createMountain(x, z, scaleY) {
+            const geo = new THREE.ConeGeometry(30, scaleY, 4);
+            const mat = new THREE.MeshBasicMaterial({ color: 0x4a00e0, wireframe: true });
+            const mtn = new THREE.Mesh(geo, mat);
+            mtn.position.set(x, scaleY/2, z);
+            scene.add(mtn);
+        }
+        createMountain(-80, -160, 45);
+        createMountain(-40, -180, 55);
+        createMountain(110, -170, 50);
+
+        // --- TRACÉ DE LA ROUTE ---
+        const curve = new THREE.CatmullRomCurve3([
+            new THREE.Vector3(0, 0, 20),
+            new THREE.Vector3(-5, 0, -50),
+            new THREE.Vector3(15, 0, -120),
+            new THREE.Vector3(-10, 0, -200),
+            new THREE.Vector3(20, 0, -300),
+            new THREE.Vector3(0, 0, -400)
+        ]);
+
+        const roadGeo = new THREE.TubeGeometry(curve, 100, 7, 2, false);
+        const roadMat = new THREE.MeshBasicMaterial({ color: 0x110022, wireframe: false });
+        const road = new THREE.Mesh(roadGeo, roadMat);
+        road.scale.set(1, 0.02, 1);
+        scene.add(road);
+
+        // Ligne jaune centrale
+        const centerRoadGeo = new THREE.TubeGeometry(curve, 100, 0.6, 2, false);
+        const centerRoadMat = new THREE.MeshBasicMaterial({ color: 0xffcc00 });
+        const centerLine = new THREE.Mesh(centerRoadGeo, centerRoadMat);
+        centerLine.scale.set(1, 0.03, 1);
+        centerLine.position.y = 0.15;
+        scene.add(centerLine);
+
+        // Barrières cyan
+        const points = curve.getPoints(100);
+        const leftRailPoints = [];
+        const rightRailPoints = [];
+
+        points.forEach((pt, i) => {
+            const tangent = curve.getTangent(i / 100).normalize();
+            const normal = new THREE.Vector3(-tangent.z, 0, tangent.x);
+            leftRailPoints.push(pt.clone().add(normal.clone().multiplyScalar(7)));
+            rightRailPoints.push(pt.clone().add(normal.clone().multiplyScalar(-7)));
+        });
+
+        const leftMat = new THREE.LineBasicMaterial({ color: 0x00ffff, linewidth: 4 });
+        const rightMat = new THREE.LineBasicMaterial({ color: 0x00ffff, linewidth: 4 });
+
+        const leftRail = new THREE.Line(new THREE.BufferGeometry().setFromPoints(leftRailPoints), leftMat);
+        const rightRail = new THREE.Line(new THREE.BufferGeometry().setFromPoints(rightRailPoints), rightMat);
+        leftRail.position.y = 0.3;
+        rightRail.position.y = 0.3;
+        scene.add(leftRail);
+        scene.add(rightRail);
+
+        // --- CACTUS ---
+        const cacti = [];
+        function createCactus(x, z) {
+            const group = new THREE.Group();
+            const mat = new THREE.MeshBasicMaterial({ color: 0x00ffff, wireframe: true });
+            
+            const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.3, 5), mat);
+            group.add(trunk);
+            const arm = new THREE.Mesh(new THREE.BoxGeometry(2, 0.3, 0.3), mat);
+            arm.position.y = 1;
+            group.add(arm);
+
+            group.position.set(x, 2.5, z);
+            scene.add(group);
+            cacti.push(group);
+        }
+
+        for (let z = 0; z > -350; z -= 30) {
+            createCactus(-18, z);
+            createCactus(18, z);
+        }
+
+        // --- VOITURE ---
+        const carGroup = new THREE.Group();
+        
+        const bodyGeo = new THREE.BoxGeometry(2.4, 0.7, 4.5);
+        const bodyMat = new THREE.MeshBasicMaterial({ color: 0xdcdcdc });
+        const carBody = new THREE.Mesh(bodyGeo, bodyMat);
+        carBody.position.y = 0.5;
+        carGroup.add(carBody);
+
+        const lightsGeo = new THREE.BoxGeometry(2.2, 0.2, 0.1);
+        const lightsMat = new THREE.MeshBasicMaterial({ color: 0xff0055 });
+        const rearLights = new THREE.Mesh(lightsGeo, lightsMat);
+        rearLights.position.set(0, 0.6, 2.26);
+        carGroup.add(rearLights);
+
+        carGroup.position.set(0, 0, -8);
+        scene.add(carGroup);
+
+        camera.position.set(0, 3.5, 3);
+        camera.lookAt(0, 1, -15);
+
+        // --- ETAT DU JEU ---
+        let gameStarted = false;
+        let score = 2450;
+        let lives = 3;
+        let progress = 45;
+        let fuel = 100; // Essence à 100% au départ
+        let isGameOver = false;
+        let targetX = 0;
+        let invulnerable = false;
+        const keys = { ArrowLeft: false, ArrowRight: false };
+
+        // --- OBSTACLES & JERRICANS ---
+        const obstacles = [];
+        const fuelCans = [];
+
+        function spawnObstacle() {
+            if (!gameStarted || isGameOver) return;
+            const obsGeo = new THREE.BoxGeometry(2, 2, 2);
+            const obsMat = new THREE.MeshBasicMaterial({ color: 0xff0055, wireframe: true });
+            const obstacle = new THREE.Mesh(obsGeo, obsMat);
+            
+            const randomX = (Math.random() - 0.5) * 10;
+            obstacle.position.set(randomX, 1, -180);
+            scene.add(obstacle);
+            obstacles.push(obstacle);
+        }
+        setInterval(spawnObstacle, 1100);
+
+        // Créer un Jerrican d'essence 3D (Jaune fluo)
+        function createFuelCanMesh() {
+            const group = new THREE.Group();
+            const mat = new THREE.MeshBasicMaterial({ color: 0xffcc00 });
+            
+            // Corps du jerrican
+            const body = new THREE.Mesh(new THREE.BoxGeometry(1.2, 1.6, 0.8), mat);
+            group.add(body);
+            
+            // Poignée / Bouchon
+            const cap = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.3, 0.4), mat);
+            cap.position.set(0.3, 0.95, 0);
+            group.add(cap);
+
+            return group;
+        }
+
+        function spawnFuelCan() {
+            if (!gameStarted || isGameOver) return;
+            const can = createFuelCanMesh();
+            const randomX = (Math.random() - 0.5) * 10;
+            can.position.set(randomX, 0.9, -180);
+            scene.add(can);
+            fuelCans.push(can);
+        }
+        setInterval(spawnFuelCan, 4500); // Fait apparaître un jerrican toutes les 4,5s
+
+        function updateHUD() {
+            document.getElementById('score').textContent = String(Math.floor(score)).padStart(6, '0');
+            document.getElementById('lives').textContent = '♥'.repeat(lives);
+            document.getElementById('progressText').textContent = Math.floor(progress) + '%';
+            
+            // Mise à jour jauge d'essence
+            const displayFuel = Math.max(0, Math.floor(fuel));
+            document.getElementById('fuelText').textContent = displayFuel + '%';
+            document.getElementById('fuelBar').style.width = displayFuel + '%';
+        }
+        updateHUD();
+
+        // --- MINI MAP ---
+        const mapCanvas = document.getElementById('minimap');
+        const mapCtx = mapCanvas.getContext('2d');
+
+        function drawMinimap() {
+            mapCtx.clearRect(0, 0, 100, 100);
+            
+            mapCtx.strokeStyle = '#00ffff';
+            mapCtx.lineWidth = 3;
+            mapCtx.beginPath();
+            mapCtx.moveTo(20, 90);
+            mapCtx.bezierCurveTo(30, 60, 80, 40, 50, 10);
+            mapCtx.stroke();
+
+            const mapX = 50 + carGroup.position.x * 2;
+            mapCtx.fillStyle = '#ff0055';
+            mapCtx.beginPath();
+            mapCtx.arc(Math.max(10, Math.min(90, mapX)), 75, 4, 0, Math.PI * 2);
+            mapCtx.fill();
+        }
+
+        window.addEventListener('keydown', e => { if (keys.hasOwnProperty(e.key)) keys[e.key] = true; });
+        window.addEventListener('keyup', e => { if (keys.hasOwnProperty(e.key)) keys[e.key] = false; });
+
+        const btn = document.getElementById('permissionBtn');
+        btn.addEventListener('click', () => {
+            btn.style.display = 'none';
+            gameStarted = true;
+
+            if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+                DeviceOrientationEvent.requestPermission().then(res => {
+                    if (res === 'granted') window.addEventListener('deviceorientation', handleGyro);
+                });
+            } else {
+                window.addEventListener('deviceorientation', handleGyro);
+            }
+        });
+
+        function handleGyro(event) {
+            if (event.gamma !== null) {
+                targetX = event.gamma * 0.3;
+            }
+        }
+
+        // --- ANIMATION ---
+        const speed = 2.2;
+
+        function animate() {
+            requestAnimationFrame(animate);
+
+            if (!gameStarted || isGameOver) {
+                drawMinimap();
+                renderer.render(scene, camera);
+                return;
+            }
+
+            // Décoration
+            cacti.forEach(c => {
+                c.position.z += speed;
+                if (c.position.z > 10) c.position.z = -350;
+            });
+
+            // Déplacement
+            if (keys.ArrowLeft) targetX -= 0.4;
+            if (keys.ArrowRight) targetX += 0.4;
+
+            targetX = Math.max(-6, Math.min(6, targetX));
+            carGroup.position.x += (targetX - carGroup.position.x) * 0.1;
+            carGroup.rotation.z = (carGroup.position.x - targetX) * 0.05;
+
+            // Progression & Diminution de l'essence
+            progress += 0.03;
+            if (progress >= 100) progress = 100;
+
+            fuel -= 0.05; // L'essence diminue avec la distance
+            if (fuel <= 0) {
+                fuel = 0;
+                updateHUD();
+                isGameOver = true;
+                alert("PANNE D'ESSENCE ! Game Over");
+                document.location.reload();
+                return;
+            }
+            updateHUD();
+
+            // Gestion des Jerricans (Collecte d'essence)
+            for (let i = fuelCans.length - 1; i >= 0; i--) {
+                const can = fuelCans[i];
+                can.position.z += speed;
+                can.rotation.y += 0.03; // Rotation du jerrican sur lui-même
+
+                const dx = Math.abs(carGroup.position.x - can.position.x);
+                const dz = Math.abs(carGroup.position.z - can.position.z);
+
+                // Collision avec un jerrican -> Recharge plein d'essence
+                if (dx < 1.8 && dz < 2.0) {
+                    fuel = 100; // Recharge au max
+                    updateHUD();
+                    scene.remove(can);
+                    fuelCans.splice(i, 1);
+                    continue;
+                }
+
+                if (can.position.z > 5) {
+                    scene.remove(can);
+                    fuelCans.splice(i, 1);
+                }
+            }
+
+            // Gestion des Obstacles
+            for (let i = obstacles.length - 1; i >= 0; i--) {
+                const obs = obstacles[i];
+                obs.position.z += speed;
+
+                const dx = Math.abs(carGroup.position.x - obs.position.x);
+                const dz = Math.abs(carGroup.position.z - obs.position.z);
+
+                if (dx < 1.8 && dz < 2.0 && !invulnerable) {
+                    lives--;
+                    updateHUD();
+                    scene.remove(obs);
+                    obstacles.splice(i, 1);
+
+                    invulnerable = true;
+                    setTimeout(() => { invulnerable = false; }, 1000);
+
+                    if (lives <= 0) {
+                        isGameOver = true;
+                        alert("GAME OVER ! Score : " + String(Math.floor(score)).padStart(6, '0'));
+                        document.location.reload();
+                        return;
+                    }
+                    continue;
+                }
+
+                if (obs.position.z > 5) {
+                    scene.remove(obs);
+                    obstacles.splice(i, 1);
+                    score += 50;
+                    updateHUD();
+                }
+            }
+
+            drawMinimap();
+            renderer.render(scene, camera);
+        }
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        animate();
+    </script>
+</body>
+</html>
     <div id="hud">
         SCORE: <span id="score">002450</span><br>
         LIVES: <span id="lives" class="hearts">♥♥♥</span><br>
