@@ -12,7 +12,6 @@
             font-family: 'Courier New', Courier, monospace;
             touch-action: none;
         }
-        /* Effet scanlines CRT plus prononcé */
         body::after {
             content: " ";
             display: block;
@@ -176,7 +175,6 @@
         // --- MONTAGNES SYNTHWAVE ---
         function createMountainGroup(x, z, radius, height) {
             const group = new THREE.Group();
-            
             const geo = new THREE.ConeGeometry(radius, height, 6);
             const mat = new THREE.MeshBasicMaterial({ color: 0x220044, wireframe: true });
             const mtn = new THREE.Mesh(geo, mat);
@@ -204,60 +202,65 @@
         floor.position.set(0, -0.2, -250);
         scene.add(floor);
 
-        // --- ROUTE DROITE AVEC MARQUAGES & RAILS ---
+        // --- ROUTE & BORDURES AVEC GESTION DES VIRAGES ---
         const roadWidth = 16;
-        const roadLength = 600;
-        
-        const roadGeo = new THREE.PlaneGeometry(roadWidth, roadLength);
+        const roadSegments = 120;
+        const segmentLength = 5;
+        const totalRoadLength = roadSegments * segmentLength; // 600 units
+
+        const roadGeo = new THREE.PlaneGeometry(roadWidth, totalRoadLength, 1, roadSegments);
         const roadMat = new THREE.MeshBasicMaterial({ color: 0x0b0018, side: THREE.DoubleSide });
         const road = new THREE.Mesh(roadGeo, roadMat);
         road.rotation.x = -Math.PI / 2;
-        road.position.set(0, 0.01, -250);
+        road.position.set(0, 0.01, -totalRoadLength / 2 + 50);
         scene.add(road);
 
-        // Lignes centrales pointillées (double ligne)
+        // Structure pour calculer la courbure dynamique
+        let currentCurvature = 0;
+        let targetCurvature = 0;
+        let curveTimer = 0;
+
+        function getRoadOffsetX(z) {
+            // Calcule le décalage X selon la distance Z par rapport à la voiture (z = -8)
+            const dist = Math.max(0, -8 - z);
+            return currentCurvature * Math.pow(dist / 100, 2) * 15;
+        }
+
+        // Rail de sécurité
+        const leftRailGeo = new THREE.BufferGeometry();
+        const rightRailGeo = new THREE.BufferGeometry();
+        const railMat = new THREE.LineBasicMaterial({ color: 0xff00ff, linewidth: 4 });
+
+        const railPointsLeft = new Float32Array((roadSegments + 1) * 3);
+        const railPointsRight = new Float32Array((roadSegments + 1) * 3);
+
+        leftRailGeo.setAttribute('position', new THREE.BufferAttribute(railPointsLeft, 3));
+        rightRailGeo.setAttribute('position', new THREE.BufferAttribute(railPointsRight, 3));
+
+        const leftRail = new THREE.Line(leftRailGeo, railMat);
+        const rightRail = new THREE.Line(rightRailGeo, railMat);
+        scene.add(leftRail);
+        scene.add(rightRail);
+
+        // Pointillés centraux (double ligne)
         const dashGroup = new THREE.Group();
-        for (let z = 50; z > -500; z -= 12) {
+        const dashes = [];
+        for (let z = 50; z > -550; z -= 12) {
             const lineGeo = new THREE.BoxGeometry(0.3, 0.02, 6);
             const lineMat = new THREE.MeshBasicMaterial({ color: 0x00ffff });
             
             const lineLeft = new THREE.Mesh(lineGeo, lineMat);
-            lineLeft.position.set(-0.5, 0.05, z);
-            
             const lineRight = new THREE.Mesh(lineGeo, lineMat);
-            lineRight.position.set(0.5, 0.05, z);
 
             dashGroup.add(lineLeft);
             dashGroup.add(lineRight);
+            dashes.push({ left: lineLeft, right: lineRight, baseZ: z });
         }
         scene.add(dashGroup);
 
-        // Rails de sécurité latéraux avec barrières lumineuses
-        const railMat = new THREE.LineBasicMaterial({ color: 0xff00ff, linewidth: 4 });
-        
-        const leftRailPoints = [new THREE.Vector3(-roadWidth / 2, 0.3, 50), new THREE.Vector3(-roadWidth / 2, 0.3, -500)];
-        const rightRailPoints = [new THREE.Vector3(roadWidth / 2, 0.3, 50), new THREE.Vector3(roadWidth / 2, 0.3, -500)];
-
-        scene.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(leftRailPoints), railMat));
-        scene.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(rightRailPoints), railMat));
-
-        // Poteaux de barrière
-        for (let z = 50; z > -500; z -= 20) {
-            const postGeo = new THREE.BoxGeometry(0.2, 1.2, 0.2);
-            const postMat = new THREE.MeshBasicMaterial({ color: 0x00ffff });
-            
-            const p1 = new THREE.Mesh(postGeo, postMat);
-            p1.position.set(-roadWidth / 2, 0.6, z);
-            scene.add(p1);
-
-            const p2 = new THREE.Mesh(postGeo, postMat);
-            p2.position.set(roadWidth / 2, 0.6, z);
-            scene.add(p2);
-        }
-
-        // --- CACTUS STYLE SAGUARO LUMINEUX (Violet / Cyan) ---
+        // --- CACTUS STYLE SAGUARO ---
         const cacti = [];
-        function createNeonCactus(x, z) {
+        function createNeonCactus(side, baseZ) {
             const group = new THREE.Group();
             const matViolet = new THREE.MeshBasicMaterial({ color: 0xcc00ff, wireframe: true });
             const matCyan = new THREE.MeshBasicMaterial({ color: 0x00ffff, wireframe: true });
@@ -265,7 +268,6 @@
             const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.5, 7, 8), matViolet);
             group.add(trunk);
 
-            // Arm 1
             const arm1 = new THREE.Mesh(new THREE.BoxGeometry(2.5, 0.4, 0.4), matCyan);
             arm1.position.set(1.1, 1.2, 0);
             group.add(arm1);
@@ -274,7 +276,6 @@
             arm1Up.position.set(2.1, 2.2, 0);
             group.add(arm1Up);
 
-            // Arm 2
             const arm2 = new THREE.Mesh(new THREE.BoxGeometry(2.5, 0.4, 0.4), matCyan);
             arm2.position.set(-1.1, 0.2, 0);
             group.add(arm2);
@@ -283,14 +284,13 @@
             arm2Up.position.set(-2.1, 1.2, 0);
             group.add(arm2Up);
 
-            group.position.set(x, 3.5, z);
             scene.add(group);
-            cacti.push(group);
+            cacti.push({ mesh: group, side: side, baseZ: baseZ });
         }
 
-        for (let z = 0; z > -450; z -= 30) {
-            createNeonCactus(-22, z);
-            createNeonCactus(22, z);
+        for (let z = 50; z > -550; z -= 30) {
+            createNeonCactus(-1, z);
+            createNeonCactus(1, z);
         }
 
         // --- VOITURE STYLE DELOREAN ---
@@ -347,16 +347,16 @@
             const obsMat = new THREE.MeshBasicMaterial({ color: 0xff0055, wireframe: true });
             const obstacle = new THREE.Mesh(obsGeo, obsMat);
             
-            const randomX = (Math.random() - 0.5) * 11;
-            obstacle.position.set(randomX, 1, -180);
+            const relativeX = (Math.random() - 0.5) * 11;
+            const baseZ = -220;
             scene.add(obstacle);
-            obstacles.push(obstacle);
+            obstacles.push({ mesh: obstacle, relativeX: relativeX, z: baseZ });
         }
         setInterval(spawnObstacle, 1100);
 
         function createFuelCanMesh() {
             const group = new THREE.Group();
-            const mat = new THREE.MeshBasicMaterial({ color: 0xffff00 }); // Jaune néon
+            const mat = new THREE.MeshBasicMaterial({ color: 0xffff00 });
             
             const body = new THREE.Mesh(new THREE.BoxGeometry(1.2, 1.6, 0.8), mat);
             group.add(body);
@@ -371,10 +371,10 @@
         function spawnFuelCan() {
             if (!gameStarted || isGameOver || isPaused) return;
             const can = createFuelCanMesh();
-            const randomX = (Math.random() - 0.5) * 11;
-            can.position.set(randomX, 0.9, -180);
+            const relativeX = (Math.random() - 0.5) * 11;
+            const baseZ = -220;
             scene.add(can);
-            fuelCans.push(can);
+            fuelCans.push({ mesh: can, relativeX: relativeX, z: baseZ });
         }
         setInterval(spawnFuelCan, 4500);
 
@@ -395,12 +395,14 @@
         function drawMinimap() {
             mapCtx.clearRect(0, 0, 120, 120);
             
-            // Route droite
+            // Dessin de la route incurvée
             mapCtx.strokeStyle = '#00ffff';
             mapCtx.lineWidth = 3;
             mapCtx.beginPath();
-            mapCtx.moveTo(60, 10);
-            mapCtx.lineTo(60, 110);
+            mapCtx.moveTo(60, 110);
+            
+            const curveOffset = currentCurvature * 35;
+            mapCtx.quadraticCurveTo(60, 60, 60 + curveOffset, 10);
             mapCtx.stroke();
 
             // Voiture
@@ -446,16 +448,20 @@
         });
 
         function resetGame() {
-            obstacles.forEach(obs => scene.remove(obs));
+            obstacles.forEach(o => scene.remove(o.mesh));
             obstacles.length = 0;
 
-            fuelCans.forEach(can => scene.remove(can));
+            fuelCans.forEach(c => scene.remove(c.mesh));
             fuelCans.length = 0;
 
             score = 0;
             lives = 3;
             progress = 0;
             targetX = 0;
+            currentCurvature = 0;
+            targetCurvature = 0;
+            curveTimer = 0;
+
             carGroup.position.x = 0;
             carGroup.rotation.z = 0;
             isGameOver = false;
@@ -505,6 +511,30 @@
         // --- ANIMATION ---
         const speed = 2.4;
 
+        function updateRoadMesh() {
+            // Mettre à jour la géométrie de la route
+            const posAttr = roadGeo.attributes.position;
+            const lPos = leftRailGeo.attributes.position;
+            const rPos = rightRailGeo.attributes.position;
+
+            for (let i = 0; i <= roadSegments; i++) {
+                const z = 50 - i * segmentLength;
+                const offsetX = getRoadOffsetX(z);
+
+                // Décalage plan de route
+                posAttr.setX(i * 2, -roadWidth / 2 + offsetX);
+                posAttr.setX(i * 2 + 1, roadWidth / 2 + offsetX);
+
+                // Décalage rails
+                lPos.setXYZ(i, -roadWidth / 2 + offsetX, 0.3, z);
+                rPos.setXYZ(i, roadWidth / 2 + offsetX, 0.3, z);
+            }
+
+            posAttr.needsUpdate = true;
+            lPos.needsUpdate = true;
+            rPos.needsUpdate = true;
+        }
+
         function animate() {
             requestAnimationFrame(animate);
 
@@ -514,24 +544,52 @@
                 return;
             }
 
-            // Déplacement cactus
+            // Gestion aléatoire des virages
+            curveTimer--;
+            if (curveTimer <= 0) {
+                curveTimer = Math.floor(Math.random() * 150) + 100;
+                // Alternance entre virages (-1, 1) et lignes droites (0)
+                if (targetCurvature !== 0) {
+                    targetCurvature = 0;
+                } else {
+                    targetCurvature = (Math.random() > 0.5 ? 1 : -1) * (Math.random() * 0.8 + 0.5);
+                }
+            }
+            currentCurvature += (targetCurvature - currentCurvature) * 0.015;
+
+            // Mettre à jour la courbure globale de la route
+            updateRoadMesh();
+
+            // Mettre à jour les cactus
             cacti.forEach(c => {
-                c.position.z += speed;
-                if (c.position.z > 10) c.position.z = -450;
+                c.baseZ += speed;
+                if (c.baseZ > 50) c.baseZ -= 600;
+
+                const offsetX = getRoadOffsetX(c.baseZ);
+                const posX = (c.side * (roadWidth / 2 + 6)) + offsetX;
+                c.mesh.position.set(posX, 3.5, c.baseZ);
             });
 
-            // Déplacement pointillés
-            dashGroup.children.forEach(d => {
-                d.position.z += speed;
-                if (d.position.z > 10) d.position.z -= 550;
+            // Mettre à jour les pointillés
+            dashes.forEach(d => {
+                d.baseZ += speed;
+                if (d.baseZ > 50) d.baseZ -= 600;
+
+                const offsetX = getRoadOffsetX(d.baseZ);
+                d.left.position.set(-0.5 + offsetX, 0.05, d.baseZ);
+                d.right.position.set(0.5 + offsetX, 0.05, d.baseZ);
             });
 
+            // Contrôles joueur
             if (keys.ArrowLeft) targetX -= 0.45;
             if (keys.ArrowRight) targetX += 0.45;
 
             targetX = Math.max(-6.5, Math.min(6.5, targetX));
-            carGroup.position.x += (targetX - carGroup.position.x) * 0.1;
-            carGroup.rotation.z = (carGroup.position.x - targetX) * 0.05;
+            
+            // Force centrifuge appliquée au véhicule selon le virage
+            const curveForce = -currentCurvature * 0.12;
+            carGroup.position.x += (targetX - carGroup.position.x) * 0.1 + curveForce;
+            carGroup.rotation.z = (carGroup.position.x - targetX) * 0.05 - currentCurvature * 0.15;
 
             // Progression
             progress += 0.03;
@@ -546,22 +604,25 @@
             // Gestion jerricans jaunes
             for (let i = fuelCans.length - 1; i >= 0; i--) {
                 const can = fuelCans[i];
-                can.position.z += speed;
-                can.rotation.y += 0.03;
+                can.z += speed;
+                
+                const offsetX = getRoadOffsetX(can.z);
+                can.mesh.position.set(can.relativeX + offsetX, 0.9, can.z);
+                can.mesh.rotation.y += 0.03;
 
-                const dx = Math.abs(carGroup.position.x - can.position.x);
-                const dz = Math.abs(carGroup.position.z - can.position.z);
+                const dx = Math.abs(carGroup.position.x - can.mesh.position.x);
+                const dz = Math.abs(carGroup.position.z - can.z);
 
                 if (dx < 1.8 && dz < 2.0) {
                     score += 200;
                     updateHUD();
-                    scene.remove(can);
+                    scene.remove(can.mesh);
                     fuelCans.splice(i, 1);
                     continue;
                 }
 
-                if (can.position.z > 5) {
-                    scene.remove(can);
+                if (can.z > 5) {
+                    scene.remove(can.mesh);
                     fuelCans.splice(i, 1);
                 }
             }
@@ -569,15 +630,18 @@
             // Gestion obstacles
             for (let i = obstacles.length - 1; i >= 0; i--) {
                 const obs = obstacles[i];
-                obs.position.z += speed;
+                obs.z += speed;
 
-                const dx = Math.abs(carGroup.position.x - obs.position.x);
-                const dz = Math.abs(carGroup.position.z - obs.position.z);
+                const offsetX = getRoadOffsetX(obs.z);
+                obs.mesh.position.set(obs.relativeX + offsetX, 1, obs.z);
+
+                const dx = Math.abs(carGroup.position.x - obs.mesh.position.x);
+                const dz = Math.abs(carGroup.position.z - obs.z);
 
                 if (dx < 1.8 && dz < 2.0 && !invulnerable) {
                     lives--;
                     updateHUD();
-                    scene.remove(obs);
+                    scene.remove(obs.mesh);
                     obstacles.splice(i, 1);
 
                     invulnerable = true;
@@ -590,530 +654,8 @@
                     continue;
                 }
 
-                if (obs.position.z > 5) {
-                    scene.remove(obs);
-                    obstacles.splice(i, 1);
-                    score += 50;
-                    updateHUD();
-                }
-            }
-
-            drawMinimap();
-            renderer.render(scene, camera);
-        }
-
-        window.addEventListener('resize', () => {
-            camera.aspect = window.innerWidth / window.innerHeight;
-            camera.updateProjectionMatrix();
-            renderer.setSize(window.innerWidth, window.innerHeight);
-        });
-
-        animate();
-    </script>
-</body>
-</html>            background: rgba(15, 0, 30, 0.85);
-            box-shadow: 0 0 12px #00ffff;
-            border-radius: 6px;
-            z-index: 10;
-        }
-        #permissionBtn {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            padding: 18px 32px;
-            font-size: 20px;
-            font-weight: bold;
-            color: #fff;
-            background: linear-gradient(45deg, #ff007f, #7928ca);
-            border: 2px solid #00ffff;
-            border-radius: 12px;
-            box-shadow: 0 0 25px #ff007f;
-            cursor: pointer;
-            z-index: 20;
-        }
-        #pauseMenu {
-            display: none;
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            text-align: center;
-            color: #00ffff;
-            font-size: 30px;
-            font-weight: bold;
-            text-shadow: 0 0 12px #00ffff;
-            z-index: 30;
-            background: rgba(10, 0, 20, 0.9);
-            padding: 35px 55px;
-            border: 2px solid #ff007f;
-            border-radius: 12px;
-            box-shadow: 0 0 25px #ff007f;
-            user-select: none;
-        }
-        #resumeBtn {
-            margin-top: 20px;
-            padding: 12px 26px;
-            font-size: 16px;
-            font-weight: bold;
-            color: #fff;
-            background: linear-gradient(45deg, #ff007f, #7928ca);
-            border: 2px solid #00ffff;
-            border-radius: 8px;
-            box-shadow: 0 0 12px #00ffff;
-            cursor: pointer;
-        }
-    </style>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-</head>
-<body>
-
-    <div id="hud">
-        SCORE: <span id="score">000000</span><br>
-        LIVES: <span id="lives" class="hearts">♥♥♥</span><br>
-        FUEL: <span id="fuelText">100%</span>
-        <div id="fuelContainer"><div id="fuelBar"></div></div>
-    </div>
-
-    <canvas id="minimap" width="110" height="110"></canvas>
-
-    <button id="permissionBtn">LANCER LE JEU</button>
-
-    <div id="pauseMenu">
-        PAUSE<br>
-        <button id="resumeBtn">REPRENDRE</button>
-    </div>
-
-    <script>
-        // --- SCÈNE 3D ---
-        const scene = new THREE.Scene();
-        scene.fog = new THREE.FogExp2(0x1a002b, 0.007);
-
-        const camera = new THREE.PerspectiveCamera(65, window.innerWidth / window.innerHeight, 0.1, 1000);
-        
-        const renderer = new THREE.WebGLRenderer({ antialias: true });
-        renderer.setSize(window.innerWidth, window.innerHeight);
-        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-        document.body.appendChild(renderer.domElement);
-
-        // --- ÉCLAIRAGE NÉON ---
-        const ambientLight = new THREE.AmbientLight(0xff00aa, 0.8);
-        scene.add(ambientLight);
-
-        const dirLight = new THREE.DirectionalLight(0x00ffff, 1.2);
-        dirLight.position.set(0, 50, -100);
-        scene.add(dirLight);
-
-        // --- CIEL ÉTOILÉ & BRUME VIOLETTE ---
-        const starsGeo = new THREE.BufferGeometry();
-        const starsCount = 600;
-        const starPos = new Float32Array(starsCount * 3);
-        for(let i=0; i<starsCount*3; i+=3) {
-            starPos[i] = (Math.random() - 0.5) * 500;
-            starPos[i+1] = Math.random() * 120 + 5;
-            starPos[i+2] = -Math.random() * 250 - 20;
-        }
-        starsGeo.setAttribute('position', new THREE.BufferAttribute(starPos, 3));
-        const starsMat = new THREE.PointsMaterial({ color: 0xffffff, size: 0.9 });
-        scene.add(new THREE.Points(starsGeo, starsMat));
-
-        // --- PLANÈTE / SOLEIL RÉTRO STYLISÉ ---
-        const planetGeo = new THREE.SphereGeometry(30, 32, 32);
-        const planetMat = new THREE.MeshBasicMaterial({ color: 0x8000ff, wireframe: true });
-        const planet = new THREE.Mesh(planetGeo, planetMat);
-        planet.position.set(45, 20, -180);
-        scene.add(planet);
-
-        // --- MONTAGNES NÉON AVEC SOMMETS LUMINEUX ---
-        function createMountainGroup(x, z, radius, height) {
-            const group = new THREE.Group();
-            
-            const geo = new THREE.ConeGeometry(radius, height, 5);
-            const mat = new THREE.MeshBasicMaterial({ color: 0x3d0066, wireframe: true });
-            const mtn = new THREE.Mesh(geo, mat);
-            group.add(mtn);
-
-            const topGeo = new THREE.ConeGeometry(radius * 0.4, height * 0.4, 5);
-            const topMat = new THREE.MeshBasicMaterial({ color: 0x00ffff, wireframe: true });
-            const topMtn = new THREE.Mesh(topGeo, topMat);
-            topMtn.position.y = height * 0.3;
-            group.add(topMtn);
-
-            group.position.set(x, height/2, z);
-            scene.add(group);
-        }
-
-        createMountainGroup(-90, -160, 35, 55);
-        createMountainGroup(-45, -190, 45, 70);
-        createMountainGroup(95, -170, 40, 60);
-
-        // --- SOL ET GRILLE SYNTHWAVE ---
-        const floorGeo = new THREE.PlaneGeometry(400, 500, 40, 50);
-        const floorMat = new THREE.MeshBasicMaterial({ color: 0x110022, wireframe: true });
-        const floor = new THREE.Mesh(floorGeo, floorMat);
-        floor.rotation.x = -Math.PI / 2;
-        floor.position.set(0, -0.2, -200);
-        scene.add(floor);
-
-        // --- ROUTE DROITE ---
-        const roadWidth = 14;
-        const roadLength = 500;
-        
-        const roadGeo = new THREE.PlaneGeometry(roadWidth, roadLength, 1, 50);
-        const roadMat = new THREE.MeshBasicMaterial({ color: 0x0a0015, side: THREE.DoubleSide });
-        const road = new THREE.Mesh(roadGeo, roadMat);
-        road.rotation.x = -Math.PI / 2;
-        road.position.set(0, 0.01, -200);
-        scene.add(road);
-
-        // Bordures violettes lumineuses droites
-        const railMat = new THREE.LineBasicMaterial({ color: 0xff00ff, linewidth: 3 });
-        
-        const leftRailPoints = [
-            new THREE.Vector3(-roadWidth / 2, 0.2, 50),
-            new THREE.Vector3(-roadWidth / 2, 0.2, -450)
-        ];
-        const rightRailPoints = [
-            new THREE.Vector3(roadWidth / 2, 0.2, 50),
-            new THREE.Vector3(roadWidth / 2, 0.2, -450)
-        ];
-
-        const leftRail = new THREE.Line(new THREE.BufferGeometry().setFromPoints(leftRailPoints), railMat);
-        const rightRail = new THREE.Line(new THREE.BufferGeometry().setFromPoints(rightRailPoints), railMat);
-        scene.add(leftRail);
-        scene.add(rightRail);
-
-        // --- CACTUS STYLE SAGUARO LUMINEUX ---
-        const cacti = [];
-        function createNeonCactus(x, z) {
-            const group = new THREE.Group();
-            const mat = new THREE.MeshBasicMaterial({ color: 0x00ffff, wireframe: true });
-            
-            const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.4, 6, 8), mat);
-            group.add(trunk);
-
-            const arm1 = new THREE.Mesh(new THREE.BoxGeometry(2.2, 0.4, 0.4), mat);
-            arm1.position.set(0.9, 1.2, 0);
-            group.add(arm1);
-
-            const arm1Up = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.3, 2, 8), mat);
-            arm1Up.position.set(1.8, 2, 0);
-            group.add(arm1Up);
-
-            const arm2 = new THREE.Mesh(new THREE.BoxGeometry(2.2, 0.4, 0.4), mat);
-            arm2.position.set(-0.9, 0.2, 0);
-            group.add(arm2);
-
-            const arm2Up = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.3, 2, 8), mat);
-            arm2Up.position.set(-1.8, 1, 0);
-            group.add(arm2Up);
-
-            group.position.set(x, 3, z);
-            scene.add(group);
-            cacti.push(group);
-        }
-
-        for (let z = 0; z > -400; z -= 25) {
-            createNeonCactus(-20, z);
-            createNeonCactus(20, z);
-        }
-
-        // --- VOITURE STYLE DELOREAN ---
-        const carGroup = new THREE.Group();
-        
-        // Carrosserie argentée/métallique
-        const bodyGeo = new THREE.BoxGeometry(2.5, 0.6, 4.6);
-        const bodyMat = new THREE.MeshPhongMaterial({ color: 0xcccccc, specular: 0x00ffff, shininess: 40 });
-        const carBody = new THREE.Mesh(bodyGeo, bodyMat);
-        carBody.position.y = 0.6;
-        carGroup.add(carBody);
-
-        // Toit
-        const roofGeo = new THREE.BoxGeometry(2.0, 0.5, 2.2);
-        const roofMat = new THREE.MeshPhongMaterial({ color: 0x333333, specular: 0xff00ff });
-        const roof = new THREE.Mesh(roofGeo, roofMat);
-        roof.position.set(0, 1.1, -0.2);
-        carGroup.add(roof);
-
-        // Bandes néon
-        const stripeGeo = new THREE.BoxGeometry(2.52, 0.1, 4.62);
-        const stripeMat = new THREE.MeshBasicMaterial({ color: 0x00ffff });
-        const stripe = new THREE.Mesh(stripeGeo, stripeMat);
-        stripe.position.y = 0.5;
-        carGroup.add(stripe);
-
-        // Feux arrière rouges/roses
-        const lightsGeo = new THREE.BoxGeometry(2.2, 0.2, 0.1);
-        const lightsMat = new THREE.MeshBasicMaterial({ color: 0xff0055 });
-        const rearLights = new THREE.Mesh(lightsGeo, lightsMat);
-        rearLights.position.set(0, 0.7, 2.31);
-        carGroup.add(rearLights);
-
-        carGroup.position.set(0, 0, -8);
-        scene.add(carGroup);
-
-        camera.position.set(0, 3.8, 3.5);
-        camera.lookAt(0, 1.2, -15);
-
-        // --- ÉTAT DU JEU ---
-        let gameStarted = false;
-        let isPaused = false;
-        let score = 0;
-        let lives = 3;
-        let fuel = 100;
-        let isGameOver = false;
-        let targetX = 0;
-        let invulnerable = false;
-        const keys = { ArrowLeft: false, ArrowRight: false };
-
-        // --- OBSTACLES & JERRICANS ---
-        const obstacles = [];
-        const fuelCans = [];
-
-        function spawnObstacle() {
-            if (!gameStarted || isGameOver || isPaused) return;
-            const obsGeo = new THREE.BoxGeometry(2, 2, 2);
-            const obsMat = new THREE.MeshBasicMaterial({ color: 0xff0055, wireframe: true });
-            const obstacle = new THREE.Mesh(obsGeo, obsMat);
-            
-            const randomX = (Math.random() - 0.5) * 10;
-            obstacle.position.set(randomX, 1, -180);
-            scene.add(obstacle);
-            obstacles.push(obstacle);
-        }
-        setInterval(spawnObstacle, 1100);
-
-        function createFuelCanMesh() {
-            const group = new THREE.Group();
-            // Changement de la couleur du jerrican en jaune néon (0xffff00)
-            const mat = new THREE.MeshBasicMaterial({ color: 0xffff00 });
-            
-            const body = new THREE.Mesh(new THREE.BoxGeometry(1.2, 1.6, 0.8), mat);
-            group.add(body);
-            
-            const cap = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.3, 0.4), mat);
-            cap.position.set(0.3, 0.95, 0);
-            group.add(cap);
-
-            return group;
-        }
-
-        function spawnFuelCan() {
-            if (!gameStarted || isGameOver || isPaused) return;
-            const can = createFuelCanMesh();
-            const randomX = (Math.random() - 0.5) * 10;
-            can.position.set(randomX, 0.9, -180);
-            scene.add(can);
-            fuelCans.push(can);
-        }
-        setInterval(spawnFuelCan, 4500);
-
-        function updateHUD() {
-            document.getElementById('score').textContent = String(Math.floor(score)).padStart(6, '0');
-            document.getElementById('lives').textContent = '♥'.repeat(Math.max(0, lives));
-            
-            const displayFuel = Math.max(0, Math.floor(fuel));
-            document.getElementById('fuelText').textContent = displayFuel + '%';
-            document.getElementById('fuelBar').style.width = displayFuel + '%';
-        }
-        updateHUD();
-
-        // --- MINI MAP ---
-        const mapCanvas = document.getElementById('minimap');
-        const mapCtx = mapCanvas.getContext('2d');
-
-        function drawMinimap() {
-            mapCtx.clearRect(0, 0, 110, 110);
-            
-            // Ligne de route droite sur la carte
-            mapCtx.strokeStyle = '#00ffff';
-            mapCtx.lineWidth = 3;
-            mapCtx.beginPath();
-            mapCtx.moveTo(55, 10);
-            mapCtx.lineTo(55, 100);
-            mapCtx.stroke();
-
-            // Position de la voiture
-            const carMapX = 55 + carGroup.position.x * 2.5;
-            mapCtx.fillStyle = '#ff007f';
-            mapCtx.beginPath();
-            mapCtx.arc(Math.max(10, Math.min(100, carMapX)), 85, 5, 0, Math.PI * 2);
-            mapCtx.fill();
-        }
-
-        // --- GESTION DE LA PAUSE ---
-        const pauseMenu = document.getElementById('pauseMenu');
-        const resumeBtn = document.getElementById('resumeBtn');
-
-        function togglePause() {
-            if (!gameStarted || isGameOver) return;
-            isPaused = !isPaused;
-            pauseMenu.style.display = isPaused ? 'block' : 'none';
-        }
-
-        resumeBtn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            togglePause();
-        });
-
-        window.addEventListener('keydown', e => {
-            if (e.code === 'Space') {
-                e.preventDefault();
-                togglePause();
-                return;
-            }
-            if (keys.hasOwnProperty(e.key)) keys[e.key] = true;
-        });
-
-        window.addEventListener('keyup', e => {
-            if (keys.hasOwnProperty(e.key)) keys[e.key] = false;
-        });
-
-        window.addEventListener('pointerdown', e => {
-            if (!gameStarted || isGameOver || isPaused) return;
-            if (e.target.tagName === 'BUTTON' || e.target.closest('#hud') || e.target.closest('#minimap')) return;
-            togglePause();
-        });
-
-        // --- RÉINITIALISATION DU JEU ---
-        function resetGame() {
-            obstacles.forEach(obs => scene.remove(obs));
-            obstacles.length = 0;
-
-            fuelCans.forEach(can => scene.remove(can));
-            fuelCans.length = 0;
-
-            score = 0;
-            lives = 3;
-            fuel = 100;
-            targetX = 0;
-            carGroup.position.x = 0;
-            carGroup.rotation.z = 0;
-            isGameOver = false;
-            isPaused = false;
-            invulnerable = false;
-
-            pauseMenu.style.display = 'none';
-            updateHUD();
-        }
-
-        // --- DÉMARRAGE SÉCURISÉ ---
-        const btn = document.getElementById('permissionBtn');
-        
-        function startGame(e) {
-            if (e) e.stopPropagation();
-            resetGame();
-            btn.style.display = 'none';
-            gameStarted = true;
-
-            if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
-                DeviceOrientationEvent.requestPermission().then(res => {
-                    if (res === 'granted') window.addEventListener('deviceorientation', handleGyro);
-                }).catch(() => {});
-            } else {
-                window.addEventListener('deviceorientation', handleGyro);
-            }
-        }
-
-        btn.addEventListener('click', startGame);
-
-        function handleGyro(event) {
-            if (event.gamma !== null && !isPaused) {
-                targetX = event.gamma * 0.3;
-            }
-        }
-
-        function triggerGameOver(reason) {
-            isGameOver = true;
-            gameStarted = false;
-
-            setTimeout(() => {
-                alert(reason + "\nScore final : " + String(Math.floor(score)).padStart(6, '0'));
-                btn.textContent = "REJOUER";
-                btn.style.display = 'block';
-            }, 50);
-        }
-
-        // --- ANIMATION ---
-        const speed = 2.2;
-
-        function animate() {
-            requestAnimationFrame(animate);
-
-            if (!gameStarted || isGameOver || isPaused) {
-                drawMinimap();
-                renderer.render(scene, camera);
-                return;
-            }
-
-            cacti.forEach(c => {
-                c.position.z += speed;
-                if (c.position.z > 10) c.position.z = -400;
-            });
-
-            if (keys.ArrowLeft) targetX -= 0.4;
-            if (keys.ArrowRight) targetX += 0.4;
-
-            targetX = Math.max(-5.5, Math.min(5.5, targetX));
-            carGroup.position.x += (targetX - carGroup.position.x) * 0.1;
-            carGroup.rotation.z = (carGroup.position.x - targetX) * 0.05;
-
-            fuel -= 0.05;
-            if (fuel <= 0) {
-                fuel = 0;
-                updateHUD();
-                triggerGameOver("PANNE D'ESSENCE !");
-                return;
-            }
-            updateHUD();
-
-            for (let i = fuelCans.length - 1; i >= 0; i--) {
-                const can = fuelCans[i];
-                can.position.z += speed;
-                can.rotation.y += 0.03;
-
-                const dx = Math.abs(carGroup.position.x - can.position.x);
-                const dz = Math.abs(carGroup.position.z - can.position.z);
-
-                if (dx < 1.8 && dz < 2.0) {
-                    fuel = 100;
-                    updateHUD();
-                    scene.remove(can);
-                    fuelCans.splice(i, 1);
-                    continue;
-                }
-
-                if (can.position.z > 5) {
-                    scene.remove(can);
-                    fuelCans.splice(i, 1);
-                }
-            }
-
-            for (let i = obstacles.length - 1; i >= 0; i--) {
-                const obs = obstacles[i];
-                obs.position.z += speed;
-
-                const dx = Math.abs(carGroup.position.x - obs.position.x);
-                const dz = Math.abs(carGroup.position.z - obs.position.z);
-
-                if (dx < 1.8 && dz < 2.0 && !invulnerable) {
-                    lives--;
-                    updateHUD();
-                    scene.remove(obs);
-                    obstacles.splice(i, 1);
-
-                    invulnerable = true;
-                    setTimeout(() => { invulnerable = false; }, 1000);
-
-                    if (lives <= 0) {
-                        triggerGameOver("GAME OVER !");
-                        return;
-                    }
-                    continue;
-                }
-
-                if (obs.position.z > 5) {
-                    scene.remove(obs);
+                if (obs.z > 5) {
+                    scene.remove(obs.mesh);
                     obstacles.splice(i, 1);
                     score += 50;
                     updateHUD();
