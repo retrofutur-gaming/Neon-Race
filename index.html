@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>Neon Race 3D</title>
+    <title>Neon Race 3D - FPS</title>
     <style>
         body {
             margin: 0;
@@ -45,22 +45,185 @@
 <body>
 
     <div id="hud">SCORE: <span id="score">0</span></div>
-    <button id="permissionBtn">LANCER LE JEU (Activer Gyro/Clavier)</button>
+    <button id="permissionBtn">LANCER LE JEU</button>
 
     <script>
-        // --- INITIALISATION SCÈNE 3D ---
+        // --- SCÈNE & CAMÉRA EN PERSPECTIVE ---
         const scene = new THREE.Scene();
-        scene.fog = new THREE.FogExp2(0x0a0015, 0.015);
+        scene.fog = new THREE.FogExp2(0x0a0015, 0.012);
 
-        const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+        // Champ de vision plus large (75) pour renforcer l'impression de vitesse et de perspective
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        
         const renderer = new THREE.WebGLRenderer({ antialias: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
         renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
         document.body.appendChild(renderer.domElement);
 
-        // --- SOLEIL SYNTHWAVE ---
-        const sunGeo = new THREE.CircleGeometry(40, 32);
+        // --- SOLEIL EN ARRIÈRE-PLAN ---
+        const sunGeo = new THREE.CircleGeometry(45, 32);
         const sunMat = new THREE.MeshBasicMaterial({ color: 0xff0055 });
+        const sun = new THREE.Mesh(sunGeo, sunMat);
+        sun.position.set(0, 15, -200);
+        scene.add(sun);
+
+        // --- ROUTE EN PERSPECTIVE ET GRILLE NÉON ---
+        const gridGeo = new THREE.PlaneGeometry(80, 300, 24, 90);
+        const gridMat = new THREE.MeshBasicMaterial({ color: 0xff00aa, wireframe: true });
+        
+        const grid1 = new THREE.Mesh(gridGeo, gridMat);
+        grid1.rotation.x = -Math.PI / 2;
+        grid1.position.z = -100;
+        scene.add(grid1);
+
+        const grid2 = new THREE.Mesh(gridGeo, gridMat);
+        grid2.rotation.x = -Math.PI / 2;
+        grid2.position.z = -400;
+        scene.add(grid2);
+
+        // Bordures de route néon (bleu cyan)
+        function createLine(x) {
+            const lineGeo = new THREE.BufferGeometry().setFromPoints([
+                new THREE.Vector3(x, 0.1, 10),
+                new THREE.Vector3(x, 0.1, -500)
+            ]);
+            const lineMat = new THREE.LineBasicMaterial({ color: 0x00ffff, linewidth: 3 });
+            return new THREE.Line(lineGeo, lineMat);
+        }
+        scene.add(createLine(-10));
+        scene.add(createLine(10));
+
+        // --- VOITURE ET CAPOT (1ÈRE PERSONNE) ---
+        const carGroup = new THREE.Group();
+        
+        // Capot visible juste devant l'écran
+        const hoodGeo = new THREE.BoxGeometry(2.0, 0.4, 2.5);
+        const hoodMat = new THREE.MeshBasicMaterial({ color: 0x111122 });
+        const hood = new THREE.Mesh(hoodGeo, hoodMat);
+        hood.position.set(0, 0.2, -1.0);
+        carGroup.add(hood);
+
+        // Ligne lumineuse néon sur le capot
+        const stripeGeo = new THREE.BoxGeometry(0.1, 0.42, 2.5);
+        const stripeMat = new THREE.MeshBasicMaterial({ color: 0x00ffff });
+        const stripe = new THREE.Mesh(stripeGeo, stripeMat);
+        stripe.position.set(0, 0.2, -1.0);
+        carGroup.add(stripe);
+
+        carGroup.position.set(0, 0, 0);
+        scene.add(carGroup);
+
+        // --- POSITIONNEMENT CAMÉRA : VUE 1ÈRE PERSONNE ---
+        // Placer la caméra à hauteur du pare-brise/capot
+        camera.position.set(0, 0.9, 0.2);
+        carGroup.add(camera);
+
+        // --- OBSTACLES NÉON (CACTUS / BLOCS) ---
+        const obstacles = [];
+        function spawnObstacle() {
+            if (isGameOver) return;
+            const obsGeo = new THREE.BoxGeometry(1.6, 2.5, 1.6);
+            const obsMat = new THREE.MeshBasicMaterial({ color: 0x00ffff, wireframe: true });
+            const obstacle = new THREE.Mesh(obsGeo, obsMat);
+            
+            const randomX = (Math.random() - 0.5) * 16;
+            obstacle.position.set(randomX, 1.25, -180);
+            scene.add(obstacle);
+            obstacles.push(obstacle);
+        }
+        setInterval(spawnObstacle, 900);
+
+        // --- DÉPLACEMENT & CAPTEURS ---
+        let score = 0;
+        let isGameOver = false;
+        let targetX = 0;
+        const keys = { ArrowLeft: false, ArrowRight: false };
+
+        window.addEventListener('keydown', e => { if (keys.hasOwnProperty(e.key)) keys[e.key] = true; });
+        window.addEventListener('keyup', e => { if (keys.hasOwnProperty(e.key)) keys[e.key] = false; });
+
+        const btn = document.getElementById('permissionBtn');
+        btn.addEventListener('click', () => {
+            btn.style.display = 'none';
+
+            if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+                DeviceOrientationEvent.requestPermission().then(res => {
+                    if (res === 'granted') window.addEventListener('deviceorientation', handleGyro);
+                });
+            } else {
+                window.addEventListener('deviceorientation', handleGyro);
+            }
+        });
+
+        function handleGyro(event) {
+            if (event.gamma !== null) {
+                targetX = event.gamma * 0.3;
+            }
+        }
+
+        // --- ANIMATION ---
+        const speed = 2.2;
+
+        function animate() {
+            if (isGameOver) return;
+
+            requestAnimationFrame(animate);
+
+            // Défilement de la route
+            grid1.position.z += speed;
+            grid2.position.z += speed;
+
+            if (grid1.position.z >= 200) grid1.position.z = grid2.position.z - 300;
+            if (grid2.position.z >= 200) grid2.position.z = grid1.position.z - 300;
+
+            // Clavier
+            if (keys.ArrowLeft) targetX -= 0.35;
+            if (keys.ArrowRight) targetX += 0.35;
+
+            targetX = Math.max(-8, Math.min(8, targetX));
+            
+            // Déplacement fluide de la vue
+            carGroup.position.x += (targetX - carGroup.position.x) * 0.12;
+            
+            // Inclinaison du véhicule/caméra dans les virages
+            carGroup.rotation.z = (carGroup.position.x - targetX) * 0.04;
+
+            // Gestion des obstacles
+            for (let i = obstacles.length - 1; i >= 0; i--) {
+                const obs = obstacles[i];
+                obs.position.z += speed;
+
+                // Collision
+                const dx = Math.abs(carGroup.position.x - obs.position.x);
+                const dz = Math.abs(carGroup.position.z - obs.position.z);
+
+                if (dx < 1.4 && dz < 1.5) {
+                    isGameOver = true;
+                    alert("GAME OVER ! Score : " + Math.floor(score));
+                    document.location.reload();
+                }
+
+                if (obs.position.z > 5) {
+                    scene.remove(obs);
+                    obstacles.splice(i, 1);
+                    score += 10;
+                    document.getElementById('score').textContent = Math.floor(score);
+                }
+            }
+
+            renderer.render(scene, camera);
+        }
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        animate();
+    </script>
+</body>
+</html>        const sunMat = new THREE.MeshBasicMaterial({ color: 0xff0055 });
         const sun = new THREE.Mesh(sunGeo, sunMat);
         sun.position.set(0, 20, -200);
         scene.add(sun);
