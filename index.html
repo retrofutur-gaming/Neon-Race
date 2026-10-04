@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Synthwave Drive</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #0d001a;
+            font-family: monospace;
+            color: #00ffff;
+            touch-action: none;
+        }
+        #gameCanvas {
+            display: block;
+            margin: 0 auto;
+            background: #05000a;
+        }
+        #permissionBtn {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            padding: 15px 25px;
+            font-size: 18px;
+            background-color: #ff007f;
+            color: #fff;
+            border: none;
+            border-radius: 8px;
+            box-shadow: 0 0 15px #ff007f;
+            cursor: pointer;
+            z-index: 10;
+        }
+        #hud {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            font-size: 16px;
+            text-shadow: 0 0 5px #00ffff;
+        }
+    </style>
+</head>
+<body>
+
+    <button id="permissionBtn">Activer le Gyroscope</button>
+    <div id="hud">SCORE: <span id="score">0</span></div>
+    <canvas id="gameCanvas"></canvas>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const btn = document.getElementById('permissionBtn');
+        const scoreEl = document.getElementById('score');
+
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+
+        let score = 0;
+        let gameOver = false;
+
+        // Position de la voiture
+        const car = {
+            x: canvas.width / 2 - 20,
+            y: canvas.height - 120,
+            width: 40,
+            height: 70,
+            speedX: 0
+        };
+
+        // Liste des obstacles (cactus/rochers)
+        const obstacles = [];
+
+        function spawnObstacle() {
+            if (gameOver) return;
+            const size = Math.random() * 20 + 20;
+            obstacles.push({
+                x: Math.random() * (canvas.width - size),
+                y: -size,
+                width: size,
+                height: size,
+                speedY: Math.random() * 3 + 4
+            });
+        }
+        setInterval(spawnObstacle, 1200);
+
+        // Demande d'autorisation pour l'inclinaison sur iOS (Safari)
+        btn.addEventListener('click', () => {
+            if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+                DeviceOrientationEvent.requestPermission()
+                    .then(response => {
+                        if (response === 'granted') {
+                            window.addEventListener('deviceorientation', handleOrientation);
+                            btn.style.display = 'none';
+                        } else {
+                            alert('Permission refusée.');
+                        }
+                    })
+                    .catch(console.error);
+            } else {
+                // Pour les appareils Android ou navigateurs classiques
+                window.addEventListener('deviceorientation', handleOrientation);
+                btn.style.display = 'none';
+            }
+        });
+
+        function handleOrientation(event) {
+            // gamma représente l'inclinaison gauche/droite (de -90 à 90)
+            let tilt = event.gamma; 
+            if (tilt !== null) {
+                car.speedX = tilt * 0.4; // Sensibilité
+            }
+        }
+
+        function update() {
+            if (gameOver) return;
+
+            // Déplacement voiture
+            car.x += car.speedX;
+            if (car.x < 0) car.x = 0;
+            if (car.x + car.width > canvas.width) car.x = canvas.width - car.width;
+
+            // Déplacement obstacles
+            for (let i = obstacles.length - 1; i >= 0; i--) {
+                const obs = obstacles[i];
+                obs.y += obs.speedY;
+
+                // Test de collision
+                if (
+                    car.x < obs.x + obs.width &&
+                    car.x + car.width > obs.x &&
+                    car.y < obs.y + obs.height &&
+                    car.y + car.height > obs.y
+                ) {
+                    gameOver = true;
+                    alert(`GAME OVER ! Score final : ${score}`);
+                    document.location.reload();
+                }
+
+                // Supression des obstacles hors écran + augmentation du score
+                if (obs.y > canvas.height) {
+                    obstacles.splice(i, 1);
+                    score += 10;
+                    scoreEl.textContent = score;
+                }
+            }
+        }
+
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Dessin du décor Synthwave (Soleil)
+            ctx.fillStyle = '#ff007f';
+            ctx.beginPath();
+            ctx.arc(canvas.width / 2, canvas.height / 3, 60, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Lignes de perspective (Route)
+            ctx.strokeStyle = '#9900ff';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(canvas.width / 2 - 20, canvas.height / 3);
+            ctx.lineTo(0, canvas.height);
+            ctx.moveTo(canvas.width / 2 + 20, canvas.height / 3);
+            ctx.lineTo(canvas.width, canvas.height);
+            ctx.stroke();
+
+            // Dessin des obstacles
+            ctx.fillStyle = '#00ffff';
+            obstacles.forEach(obs => {
+                ctx.fillRect(obs.x, obs.y, obs.width, obs.height);
+            });
+
+            // Dessin de la voiture (style néon magenta)
+            ctx.fillStyle = '#ff0055';
+            ctx.shadowBlur = 10;
+            ctx.shadowColor = '#ff0055';
+            ctx.fillRect(car.x, car.y, car.width, car.height);
+            ctx.shadowBlur = 0; // Réinitialisation ombre
+
+            update();
+            requestAnimationFrame(draw);
+        }
+
+        draw();
+    </script>
+</body>
+</html>
