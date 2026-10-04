@@ -76,7 +76,7 @@
 <body>
 
     <div id="hud">
-        SCORE: <span id="score">002450</span><br>
+        SCORE: <span id="score">000000</span><br>
         LIVES: <span id="lives" class="hearts">♥♥♥</span><br>
         PROGRESS: <span id="progressText">0%</span><br>
         FUEL: <span id="fuelText">100%</span>
@@ -142,23 +142,21 @@
         scene.add(road);
 
         // --- DOUBLE LIGNE VIOLETTE CENTRALE ---
-        const lineMat = new THREE.MeshBasicMaterial({ color: 0xaa00ff }); // Violet néon
+        const lineMat = new THREE.MeshBasicMaterial({ color: 0xaa00ff });
 
-        // Ligne gauche
         const leftLineGeo = new THREE.PlaneGeometry(0.3, roadLength);
         const leftLine = new THREE.Mesh(leftLineGeo, lineMat);
         leftLine.rotation.x = -Math.PI / 2;
         leftLine.position.set(-0.35, 0.05, -roadLength / 2 + 20);
         scene.add(leftLine);
 
-        // Ligne droite
         const rightLineGeo = new THREE.PlaneGeometry(0.3, roadLength);
         const rightLine = new THREE.Mesh(rightLineGeo, lineMat);
         rightLine.rotation.x = -Math.PI / 2;
         rightLine.position.set(0.35, 0.05, -roadLength / 2 + 20);
         scene.add(rightLine);
 
-        // Barrières cyan sur les côtés
+        // Barrières cyan
         const railMat = new THREE.LineBasicMaterial({ color: 0x00ffff, linewidth: 4 });
         
         const leftRailPoints = [new THREE.Vector3(-roadWidth / 2, 0.3, 20), new THREE.Vector3(-roadWidth / 2, 0.3, -roadLength + 20)];
@@ -214,9 +212,9 @@
 
         // --- ÉTAT DU JEU ---
         let gameStarted = false;
-        let score = 2450;
+        let score = 0;
         let lives = 3;
-        let progress = 45;
+        let progress = 0;
         let fuel = 100;
         let isGameOver = false;
         let targetX = 0;
@@ -266,7 +264,7 @@
 
         function updateHUD() {
             document.getElementById('score').textContent = String(Math.floor(score)).padStart(6, '0');
-            document.getElementById('lives').textContent = '♥'.repeat(lives);
+            document.getElementById('lives').textContent = '♥'.repeat(Math.max(0, lives));
             document.getElementById('progressText').textContent = Math.floor(progress) + '%';
             
             const displayFuel = Math.max(0, Math.floor(fuel));
@@ -299,10 +297,34 @@
         window.addEventListener('keydown', e => { if (keys.hasOwnProperty(e.key)) keys[e.key] = true; });
         window.addEventListener('keyup', e => { if (keys.hasOwnProperty(e.key)) keys[e.key] = false; });
 
+        // --- RÉINITIALISATION DU JEU ---
+        function resetGame() {
+            // Nettoyer les objets existants
+            obstacles.forEach(obs => scene.remove(obs));
+            obstacles.length = 0;
+
+            fuelCans.forEach(can => scene.remove(can));
+            fuelCans.length = 0;
+
+            // Réinitialiser les variables
+            score = 0;
+            lives = 3;
+            progress = 0;
+            fuel = 100;
+            targetX = 0;
+            carGroup.position.x = 0;
+            carGroup.rotation.z = 0;
+            isGameOver = false;
+            invulnerable = false;
+
+            updateHUD();
+        }
+
         // --- DÉMARRAGE SÉCURISÉ ---
         const btn = document.getElementById('permissionBtn');
         
         function startGame() {
+            resetGame();
             btn.style.display = 'none';
             gameStarted = true;
 
@@ -322,6 +344,17 @@
             if (event.gamma !== null) {
                 targetX = event.gamma * 0.3;
             }
+        }
+
+        function triggerGameOver(reason) {
+            isGameOver = true;
+            gameStarted = false;
+
+            setTimeout(() => {
+                alert(reason + "\nScore final : " + String(Math.floor(score)).padStart(6, '0'));
+                btn.textContent = "REJOUER";
+                btn.style.display = 'block';
+            }, 50);
         }
 
         // --- ANIMATION ---
@@ -355,9 +388,7 @@
             if (fuel <= 0) {
                 fuel = 0;
                 updateHUD();
-                isGameOver = true;
-                alert("PANNE D'ESSENCE ! Game Over");
-                document.location.reload();
+                triggerGameOver("PANNE D'ESSENCE !");
                 return;
             }
             updateHUD();
@@ -401,9 +432,7 @@
                     setTimeout(() => { invulnerable = false; }, 1000);
 
                     if (lives <= 0) {
-                        isGameOver = true;
-                        alert("GAME OVER ! Score : " + String(Math.floor(score)).padStart(6, '0'));
-                        document.location.reload();
+                        triggerGameOver("GAME OVER !");
                         return;
                     }
                     continue;
