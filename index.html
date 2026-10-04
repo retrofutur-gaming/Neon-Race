@@ -3,64 +3,227 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>Neon Race</title>
+    <title>Neon Race 3D</title>
     <style>
         body {
             margin: 0;
             overflow: hidden;
-            background-color: #0d001a;
-            font-family: monospace;
-            color: #00ffff;
+            background-color: #05000a;
+            font-family: 'Courier New', Courier, monospace;
             touch-action: none;
         }
-        #gameCanvas {
-            display: block;
-            margin: 0 auto;
-            background: #05000a;
+        #hud {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            color: #00ffff;
+            font-size: 20px;
+            font-weight: bold;
+            text-shadow: 0 0 10px #00ffff;
+            z-index: 10;
         }
         #permissionBtn {
             position: absolute;
             top: 50%;
             left: 50%;
             transform: translate(-50%, -50%);
-            padding: 15px 25px;
+            padding: 18px 30px;
             font-size: 18px;
-            background-color: #ff007f;
+            font-weight: bold;
             color: #fff;
-            border: none;
-            border-radius: 8px;
-            box-shadow: 0 0 15px #ff007f;
+            background: linear-gradient(45deg, #ff007f, #7928ca);
+            border: 2px solid #00ffff;
+            border-radius: 12px;
+            box-shadow: 0 0 20px #ff007f;
             cursor: pointer;
-            z-index: 10;
-        }
-        #hud {
-            position: absolute;
-            top: 10px;
-            left: 10px;
-            font-size: 16px;
-            text-shadow: 0 0 5px #00ffff;
+            z-index: 20;
         }
     </style>
+    <!-- Moteur 3D Three.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 </head>
 <body>
 
-    <button id="permissionBtn">Activer le Gyroscope (Mobile)</button>
     <div id="hud">SCORE: <span id="score">0</span></div>
-    <canvas id="gameCanvas"></canvas>
+    <button id="permissionBtn">LANCER LE JEU (Activer Gyro/Clavier)</button>
 
     <script>
-        const canvas = document.getElementById('gameCanvas');
-        const ctx = canvas.getContext('2d');
-        const btn = document.getElementById('permissionBtn');
-        const scoreEl = document.getElementById('score');
+        // --- INITIALISATION SCÈNE 3D ---
+        const scene = new THREE.Scene();
+        scene.fog = new THREE.FogExp2(0x0a0015, 0.015);
 
-        canvas.width = window.innerWidth;
-        canvas.height = window.innerHeight;
+        const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        document.body.appendChild(renderer.domElement);
 
+        // --- SOLEIL SYNTHWAVE ---
+        const sunGeo = new THREE.CircleGeometry(40, 32);
+        const sunMat = new THREE.MeshBasicMaterial({ color: 0xff0055 });
+        const sun = new THREE.Mesh(sunGeo, sunMat);
+        sun.position.set(0, 20, -200);
+        scene.add(sun);
+
+        // --- ROUTE & GRILLE NEON ---
+        const gridGeo = new THREE.PlaneGeometry(100, 300, 30, 90);
+        const gridMat = new THREE.MeshBasicMaterial({ color: 0xff00aa, wireframe: true });
+        const grid1 = new THREE.Mesh(gridGeo, gridMat);
+        grid1.rotation.x = -Math.PI / 2;
+        grid1.position.z = -100;
+        scene.add(grid1);
+
+        const grid2 = new THREE.Mesh(gridGeo, gridMat);
+        grid2.rotation.x = -Math.PI / 2;
+        grid2.position.z = -400;
+        scene.add(grid2);
+
+        // --- BORDURES FLUO ---
+        function createLine(x) {
+            const lineGeo = new THREE.BufferGeometry().setFromPoints([
+                new THREE.Vector3(x, 0.1, 10),
+                new THREE.Vector3(x, 0.1, -500)
+            ]);
+            const lineMat = new THREE.LineBasicMaterial({ color: 0x00ffff, linewidth: 3 });
+            return new THREE.Line(lineGeo, lineMat);
+        }
+        scene.add(createLine(-12));
+        scene.add(createLine(12));
+
+        // --- VOITURE ---
+        const carGroup = new THREE.Group();
+        
+        // Corps
+        const bodyGeo = new THREE.BoxGeometry(2.2, 0.8, 4.5);
+        const bodyMat = new THREE.MeshBasicMaterial({ color: 0x111122 });
+        const carBody = new THREE.Mesh(bodyGeo, bodyMat);
+        carBody.position.y = 0.5;
+        carGroup.add(carBody);
+
+        // Phares arrière néon
+        const lightsGeo = new THREE.BoxGeometry(2, 0.2, 0.1);
+        const lightsMat = new THREE.MeshBasicMaterial({ color: 0xff0055 });
+        const rearLights = new THREE.Mesh(lightsGeo, lightsMat);
+        rearLights.position.set(0, 0.6, 2.26);
+        carGroup.add(rearLights);
+
+        carGroup.position.set(0, 0, -5);
+        scene.add(carGroup);
+
+        // Position caméra style rétro derrière le véhicule
+        camera.position.set(0, 3, 2);
+        camera.lookAt(0, 1, -10);
+
+        // --- OBSTACLES (CACTUS / OBSTACLES NÉON) ---
+        const obstacles = [];
+        function spawnObstacle() {
+            if (isGameOver) return;
+            const obsGeo = new THREE.BoxGeometry(1.8, 3, 1.8);
+            const obsMat = new THREE.MeshBasicMaterial({ color: 0x00ffff, wireframe: true });
+            const obstacle = new THREE.Mesh(obsGeo, obsMat);
+            
+            // Placement aléatoire sur la route (-9 à +9)
+            const randomX = (Math.random() - 0.5) * 18;
+            obstacle.position.set(randomX, 1.5, -180);
+            scene.add(obstacle);
+            obstacles.push(obstacle);
+        }
+        setInterval(spawnObstacle, 1000);
+
+        // --- ETAT DU JEU & CONTROLES ---
         let score = 0;
-        let gameOver = false;
+        let isGameOver = false;
+        let targetX = 0;
+        const keys = { ArrowLeft: false, ArrowRight: false };
 
-        // Contrôles clavier
+        window.addEventListener('keydown', e => { if (keys.hasOwnProperty(e.key)) keys[e.key] = true; });
+        window.addEventListener('keyup', e => { if (keys.hasOwnProperty(e.key)) keys[e.key] = false; });
+
+        // Activer les capteurs smartphone
+        const btn = document.getElementById('permissionBtn');
+        btn.addEventListener('click', () => {
+            btn.style.display = 'none';
+
+            if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+                DeviceOrientationEvent.requestPermission().then(res => {
+                    if (res === 'granted') window.addEventListener('deviceorientation', handleGyro);
+                });
+            } else {
+                window.addEventListener('deviceorientation', handleGyro);
+            }
+        });
+
+        function handleGyro(event) {
+            // gamma varie avec l'inclinaison gauche/droite
+            if (event.gamma !== null) {
+                targetX = event.gamma * 0.35; 
+            }
+        }
+
+        // --- BOUCLE D'ANIMATION ---
+        const speed = 2.0;
+
+        function animate() {
+            if (isGameOver) return;
+
+            requestAnimationFrame(animate);
+
+            // Déplacement du sol (Effet d'avancée infini)
+            grid1.position.z += speed;
+            grid2.position.z += speed;
+
+            if (grid1.position.z >= 200) grid1.position.z = grid2.position.z - 300;
+            if (grid2.position.z >= 200) grid2.position.z = grid1.position.z - 300;
+
+            // Déplacement voiture (Clavier ou Gyroscope)
+            if (keys.ArrowLeft) targetX -= 0.4;
+            if (keys.ArrowRight) targetX += 0.4;
+
+            // Limites de route
+            targetX = Math.max(-10, Math.min(10, targetX));
+            
+            // Fluidité du mouvement et inclinaison visuelle
+            carGroup.position.x += (targetX - carGroup.position.x) * 0.1;
+            carGroup.rotation.z = (carGroup.position.x - targetX) * 0.05;
+
+            // Déplacement des obstacles et détection de choc
+            for (let i = obstacles.length - 1; i >= 0; i--) {
+                const obs = obstacles[i];
+                obs.position.z += speed;
+
+                // Collision
+                const dx = Math.abs(carGroup.position.x - obs.position.x);
+                const dz = Math.abs(carGroup.position.z - obs.position.z);
+
+                if (dx < 1.8 && dz < 2.0) {
+                    isGameOver = true;
+                    alert("GAME OVER ! Score : " + Math.floor(score));
+                    document.location.reload();
+                }
+
+                // Destruction quand dépassé + Score
+                if (obs.position.z > 5) {
+                    scene.remove(obs);
+                    obstacles.splice(i, 1);
+                    score += 10;
+                    document.getElementById('score').textContent = Math.floor(score);
+                }
+            }
+
+            renderer.render(scene, camera);
+        }
+
+        // Ajustement taille fenêtre
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        animate();
+    </script>
+</body>
+</html>        // Contrôles clavier
         const keys = {
             ArrowLeft: false,
             ArrowRight: false
