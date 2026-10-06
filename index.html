@@ -85,7 +85,7 @@ function build(m){const {P,W}=m,pt=(k,s)=>[s*W[k],P[k][1],P[k][0]],F=[];
 const MF={};for(const k in MODS)MF[k]=build(MODS[k]);
 function drawCar(x,F,m,col,yaw,pit,S,ox,oy,o){
  const cy=Math.cos(yaw),sy=Math.sin(yaw),cp=Math.cos(pit),sp=Math.sin(pit);
- const pr=p=>{const X=p[0]*cy+p[2]*sy,Z=-p[0]*sy+p[2]*cy;return{X,Y:p[1],Z,x:ox+X*S,y:oy-(p[1]*cp+Z*sp)*S,d:Z*cp-p[1]*sp}};
+ const pr=o.P?p=>{const X=p[0]*cy+p[2]*sy,Z=-p[0]*sy+p[2]*cy,zc=o.P.ZO+o.P.zo+Z*o.P.U,k=CD/zc;return{X,Y:p[1],Z,x:k*X*o.P.U*W/2,y:HZ+k*(CH-p[1]*o.P.U*1.45)*H/2+o.P.dy,d:zc}}:p=>{const X=p[0]*cy+p[2]*sy,Z=-p[0]*sy+p[2]*cy;return{X,Y:p[1],Z,x:ox+X*S,y:oy-(p[1]*cp+Z*sp)*S,d:Z*cp-p[1]*sp}};
  const pl=(r,c)=>{x.fillStyle=c;x.beginPath();r.forEach((p,i)=>i?x.lineTo(p.x,p.y):x.moveTo(p.x,p.y));x.fill()};
  const ring=(rx,rz)=>Array.from({length:20},(_,a)=>pr([Math.cos(a*.314)*rx,0,Math.sin(a*.314)*rz]));
  pl(ring(1.5,2.7),'rgba(25,240,255,.3)');pl(ring(1.2,2.4),'rgba(0,0,0,.5)');
@@ -96,7 +96,7 @@ function drawCar(x,F,m,col,yaw,pit,S,ox,oy,o){
   else{const c=pr(f.cen||[0,.6,0]),q=r.reduce((s,p)=>[s[0]+p.X,s[1]+p.Y,s[2]+p.Z],[0,0,0]).map(v=>v/r.length);
    if(n[0]*(q[0]-c.X)+n[1]*(q[1]-c.Y)+n[2]*(q[2]-c.Z)<0)n=n.map(v=>-v)}
   const l=Math.hypot(n[0],n[1],n[2])||1;n=n.map(v=>v/l);
-  if(-n[1]*sp+n[2]*cp>=0)return;
+  {const q=r.reduce((s,p)=>[s[0]+p.X,s[1]+p.Y,s[2]+p.Z],[0,0,0]).map(v=>v/r.length);if(o.P?n[0]*q[0]+n[1]*(q[1]-CH/o.P.U/1.45)+n[2]*(q[2]+(o.P.ZO+o.P.zo)/o.P.U)>=0:-n[1]*sp+n[2]*cp>=0)return}
   L.push({f,r,n,d:r.reduce((s,p)=>s+p.d,0)/r.length-(f.bk||0)})});
  L.sort((p,q)=>q.d-p.d);
  L.forEach(({f,r,n})=>{
@@ -107,13 +107,13 @@ function drawCar(x,F,m,col,yaw,pit,S,ox,oy,o){
   if(r.length>3){const gr=gl?x.createLinearGradient(r[3].x,r[3].y,r[0].x,r[0].y):x.createLinearGradient(r[0].x,r[0].y,r[2].x,r[2].y);gr.addColorStop(0,gl?'rgb('+cc.map(w=>Math.min(255,w*.5+34))+')':rgb(cc,1.14));gr.addColorStop(1,gl?rgb(cc,.55):rgb(cc,.8));fs=gr}
   pl(r,fs);if(gl){x.lineJoin='round';x.strokeStyle=rgb(col,.35+.65*sh);x.lineWidth=S*.05}else{x.strokeStyle='rgba(6,6,22,.5)';x.lineWidth=S*.014}x.stroke();
   const P=(u,v)=>{const a=r[0],b=r[1],c=r[2],d=r[3],x1=a.x+(b.x-a.x)*u,y1=a.y+(b.y-a.y)*u,x2=d.x+(c.x-d.x)*u,y2=d.y+(c.y-d.y)*u;return{x:x1+(x2-x1)*v,y:y1+(y2-y1)*v}};
-  const sq=(u0,v0,u1,v1,c,gw)=>{if(gw){x.shadowColor=gw;x.shadowBlur=S*.3}pl([P(u0,v0),P(u1,v0),P(u1,v1),P(u0,v1)],c);x.shadowBlur=0};
+  const sq=(u0,v0,u1,v1,c,gw)=>{if(gw){if(o.P){x.globalAlpha=.3;pl([P(u0-.04,v0-.12),P(u1+.04,v0-.12),P(u1+.04,v1+.12),P(u0-.04,v1+.12)],gw);x.globalAlpha=1}else{x.shadowColor=gw;x.shadowBlur=S*.3}}pl([P(u0,v0),P(u1,v0),P(u1,v1),P(u0,v1)],c);x.shadowBlur=0};
   const lv=(u0,v0,u1,v1,n2,c)=>{x.strokeStyle=c;x.lineWidth=S*.016;for(let i=1;i<=n2;i++){const v=v0+(v1-v0)*i/(n2+1),a=P(u0,v),b=P(u1,v);x.beginPath();x.moveTo(a.x,a.y);x.lineTo(b.x,b.y);x.stroke()}};
   if(k=='rear'||k=='front'){const rr=k=='rear',lc=rr?(o.b?'#ff8a96':'#e0213f'):'#fff6c8',gw=rr?(o.b?'#ff4060':'#ff1f4e'):'#fff3a0',D=m.lv;
    if(D)sq(0,.12,1,.93,'#101017');
    sq(D?.03:.04,D?.45:.5,D?.35:.26,D?.82:.8,lc,gw);sq(D?.65:.74,D?.45:.5,D?.97:.96,D?.82:.8,lc,gw);
    if(D||!rr){sq(.4,.45,.6,.82,'#0a0a10');lv(.4,.45,.6,.82,3,'rgba(150,160,200,.5)')}
-   sq(.4,.1,.6,.38,'#eceef6');sq(0,0,1,.1,'#14141b');if(rr)[.12,.8].forEach(u=>{sq(u-.05,.08,u+.1,.22,'#15151c');sq(u-.02,.1,u+.07,.2,'#3a3a46')});if(rr&&o.b)sq(0,.38,1,.9,'rgba(255,50,80,.22)')}
+   sq(0,0,1,.3,'rgba(0,0,0,.28)');sq(.4,.1,.6,.38,'#eceef6');sq(.45,.18,.55,.26,'#2a2f6a');sq(0,0,1,.1,'#14141b');if(rr)[.05,.75].forEach(u=>sq(u,.66,u+.2,.72,'rgba(255,200,208,.8)'));if(rr)[.12,.8].forEach(u=>{sq(u-.05,.08,u+.1,.22,'#15151c');sq(u-.02,.1,u+.07,.2,'#3a3a46')});if(rr&&o.b)sq(0,.38,1,.9,'rgba(255,50,80,.22)')}
   if(k=='rwin'&&m.lv)lv(.02,0,.98,1,6,'rgba(205,213,240,.85)');
   if(k=='deck'&&m.lv){sq(.12,.2,.88,.8,'#0a0a10');lv(.12,.2,.88,.8,4,'rgba(150,160,200,.5)')}
   if(m.lv&&(k=='body'||k=='deck'))lv(0,0,1,1,9,'rgba(255,255,255,.09)');
@@ -124,7 +124,7 @@ function drawCar(x,F,m,col,yaw,pit,S,ox,oy,o){
    [0,2,4,6,8,10].forEach(i=>{x.beginPath();x.moveTo(mx,my);x.lineTo(ri[i].x,ri[i].y);x.stroke()});
    pl(ri.map(p=>({x:mx+(p.x-mx)*.3,y:my+(p.y-my)*.3})),'#2a2e44')}
  });
- if(o.p){x.lineWidth=S*.028;[[-1,'#ff4fd8'],[1,'#19f0ff']].forEach(([s,c])=>{const a=pr([s*m.W[3],m.P[3][1],m.P[3][0]]),b=pr([s*m.W[4],m.P[4][1],m.P[4][0]]);x.strokeStyle=c;x.beginPath();x.moveTo(a.x,a.y);x.lineTo(b.x,b.y);x.stroke()})}}
+ if(1){x.lineWidth=S*.028;[[-1,'#ff4fd8'],[1,'#19f0ff']].forEach(([s,c])=>{const a=pr([s*m.W[3],m.P[3][1],m.P[3][0]]),b=pr([s*m.W[4],m.P[4][1],m.P[4][0]]);x.strokeStyle=c;x.beginPath();x.moveTo(a.x,a.y);x.lineTo(b.x,b.y);x.stroke()})}}
 const RC=[[[106,60,216],'sport'],[[212,42,122],'sedan'],[[31,168,216],'sport'],[[201,204,216],'sedan'],[[255,122,42],'van']];
 const rv=RC.map(([c,t])=>mk(96,104,x=>drawCar(x,MF[t],MODS[t],c,0,.22,40,48,80,{})));
 const fr=RC.map(([c,t])=>mk(96,104,x=>drawCar(x,MF[t],MODS[t],c,Math.PI,.22,40,48,80,{})));
@@ -160,7 +160,6 @@ function newTrack(lv){
 }
 newTrack(1);
 const SP=W/2*CWW/CH/1.85,PW=Math.ceil(6*SP),PH=Math.ceil(3.2*SP),POY=Math.ceil(1.75*SP);
-const PF=[0,1].map(b=>Array.from({length:13},(_,i)=>mk(PW,PH,x=>drawCar(x,MF.dmc,MODS.dmc,[205,210,225],(i-6)/6*.3,.46,SP,PW/2,POY,{p:1,b}))));
 
 // ---------- DÉCOR ----------
 const lg=(a,b,s)=>{const q=g.createLinearGradient(0,a,0,b);s.forEach((c,i)=>q.addColorStop(i/(s.length-1),c));return q};
@@ -214,7 +213,7 @@ let state=0,pos=0,px=0,speed=0,score=0,lives=3,fuel=100,level=1,leanA=0,stS=0,br
 let ents=[];
 try{best=+localStorage.getItem('nr')||0}catch(e){}
 const K={},ov=$('ov');
-const maxSp=()=>5600+level*650;
+const maxSp=()=>(5600+level*500)*(.65+.6*Math.min(1,pos/L));
 function showOv(t,p,b){$('ovh').textContent=t;$('ovp').innerHTML=p;$('go').textContent=b;ov.style.display='flex'}
 function reset(){pos=0;px=0;speed=0;score=0;lives=3;fuel=100;level=1;newTrack(1);px=.5;ents=[];tR=1;tF=3;invul=0;shake=0;msgT=0}
 function start(){reset();ov.style.display='none';state=1;perm()}
@@ -239,7 +238,7 @@ function upd(dt){
  const seg=segs[(pos/SL|0)%N],mx=maxSp(),br=(K.ArrowDown||K.KeyS||tBrake)?1:0,lim=br?mx*.18:mx;braking=br;
  stS+=(steer()-stS)*Math.min(1,dt*9);
  speed+=(lim-speed)*Math.min(1,dt*(br?3.2:1.6));const sp=speed/mx;leanA+=((stS*.07+seg.c*sp*.01)-leanA)*Math.min(1,dt*7);
- px+=stS*dt*2.2-dt*2*sp*sp*seg.c*.3;const wall=Math.abs(px)>.88;px=Math.max(-.88,Math.min(.88,px));if(wall){speed*=1-dt*.8;shake=Math.max(shake,.15)}
+ px+=stS*dt*2.2-dt*sp*sp*seg.c/RW*450;const wall=Math.abs(px)>.88;px=Math.max(-.88,Math.min(.88,px));if(wall){speed*=1-dt*.8;shake=Math.max(shake,.15)}
  pos+=speed*dt;skyOff+=seg.c*sp*dt*60;score+=speed*dt*.01;fuel-=dt*3;
  shake=Math.max(0,shake-dt);invul=Math.max(0,invul-dt);msgT-=dt;
  if(pos>=L){level++;newTrack(level);pos=0;ents=[];score+=1000;const up=lives<5;lives=Math.min(5,lives+1);$('msg').textContent='COURSE '+level+(up?' · +1 VIE':'');msgT=2.2}
@@ -288,7 +287,7 @@ function draw(t){
    else spr(canS,sc,sx+ox,sy-sc*1300*H/2-Math.sin(t*4)*sc*170*H/2,1500)});
  }
  g.fillStyle=hazeG;g.fillRect(-4,HZ-26,W+8,66);
- if(state!=4&&!(invul>0&&((t*12|0)%2))){const yw=Math.max(-.3,Math.min(.3,leanA*2.5)),im=PF[braking?1:0][Math.round(yw/.3*6)+6];g.save();g.translate(W/2+stS*4,HZ+H/2-18+Math.sin(t*30)*speed/12000);g.rotate(leanA*.5);g.drawImage(im,-PW/2,-POY,PW,PH);g.restore()}
+ if(state!=4&&!(invul>0&&((t*12|0)%2))){const U=CWW/1.85,zo=500,gy=HZ+CD*CH*(H/2)/(ZO+zo);g.save();g.translate(W/2+stS*4,gy+Math.sin(t*30)*speed/20000);g.rotate(leanA*.5);drawCar(g,MF.dmc,MODS.dmc,[205,210,225],Math.max(-.3,Math.min(.3,leanA*2.5)),0,SP,0,0,{p:1,b:braking,P:{U,ZO,zo,dy:-gy}});g.restore()}
  g.restore();
  mg.setTransform(2,0,0,2,0,0);mg.clearRect(0,0,120,120);mg.drawImage(trk,0,0,120,120);const m=mpt[bi];
  mg.fillStyle='#ff4fd8';mg.strokeStyle='#19f0ff';mg.lineWidth=2;mg.beginPath();mg.arc(m[0],m[1],4,0,7);mg.fill();mg.stroke();
