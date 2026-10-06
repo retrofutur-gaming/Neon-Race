@@ -128,8 +128,6 @@ function drawCar(x,F,m,col,yaw,pit,S,ox,oy,o){
 const RC=[[[106,60,216],'sport'],[[212,42,122],'sedan'],[[31,168,216],'sport'],[[201,204,216],'sedan'],[[255,122,42],'van']];
 const rv=RC.map(([c,t])=>mk(96,104,x=>drawCar(x,MF[t],MODS[t],c,0,.22,40,48,80,{})));
 const fr=RC.map(([c,t])=>mk(96,104,x=>drawCar(x,MF[t],MODS[t],c,Math.PI,.22,40,48,80,{})));
-const SP=W/2*CWW/CH/1.85,PW=Math.ceil(6*SP),PH=Math.ceil(3.2*SP),POY=Math.ceil(1.75*SP);
-const PF=[0,1].map(b=>Array.from({length:13},(_,i)=>mk(PW,PH,x=>drawCar(x,MF.dmc,MODS.dmc,[205,210,225],(i-6)/6*.3,.46,SP,PW/2,POY,{p:1,b}))));
 const canS=mk(18,18,x=>{x.fillStyle='rgba(255,176,0,.35)';x.beginPath();x.arc(9,9,9,0,7);x.fill();
  R(x,'#ffb000',2,2,14,14);R(x,'#25103a',4,4,10,10);R(x,'#ffd24a',6,6,5,7);R(x,'#25103a',7,7,3,2);R(x,'#ffd24a',11,8,2,4)});
 const planet=mk(128,128,x=>{
@@ -161,6 +159,8 @@ function newTrack(lv){
   pa();x.strokeStyle='rgba(25,240,255,.5)';x.lineWidth=6;x.stroke();pa();x.strokeStyle='#fff';x.lineWidth=2.5;x.stroke()});
 }
 newTrack(1);
+const SP=W/2*CWW/CH/1.85,PW=Math.ceil(6*SP),PH=Math.ceil(3.2*SP),POY=Math.ceil(1.75*SP);
+const PF=[0,1].map(b=>Array.from({length:13},(_,i)=>mk(PW,PH,x=>drawCar(x,MF.dmc,MODS.dmc,[205,210,225],(i-6)/6*.3,.46,SP,PW/2,POY,{p:1,b}))));
 
 // ---------- DÉCOR ----------
 const lg=(a,b,s)=>{const q=g.createLinearGradient(0,a,0,b);s.forEach((c,i)=>q.addColorStop(i/(s.length-1),c));return q};
