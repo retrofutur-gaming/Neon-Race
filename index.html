@@ -135,8 +135,9 @@ function drawCar(x,F,m,col,yaw,pit,S,ox,oy,o){
  if(1){x.lineWidth=S*.028;[[-1,'#ff4fd8'],[1,'#19f0ff']].forEach(([s,c])=>{const a=pr([s*m.W[3],m.P[3][1],m.P[3][0]]),b=pr([s*m.W[4],m.P[4][1],m.P[4][0]]);x.strokeStyle=c;x.beginPath();x.moveTo(a.x,a.y);x.lineTo(b.x,b.y);x.stroke()})}}
 const RC=[[[196,18,46],'tes'],[[244,196,0],'cou'],[[30,92,200],'p911'],[[236,236,240],'e30'],[[34,168,160],'bulli'],[[255,110,20],'cou']];
 const RCache={};
-const rspr=(s,dir,yaw)=>{const q=Math.max(-4,Math.min(4,Math.round(yaw/.2))),k=s+'|'+dir+'|'+q;
- return RCache[k]||(RCache[k]=mk(200,110,x=>{const [c,t]=RC[s];drawCar(x,MF[t],MODS[t],c,(dir?Math.PI:0)+q*.2,.22,40,100,86,{})},2))};
+const rspr=(s,dir,yaw)=>{const q=Math.max(-5,Math.min(5,Math.round(yaw/.15))),k=s+'|'+dir+'|'+q;
+ return RCache[k]||(RCache[k]=mk(200,110,x=>{const [c,t]=RC[s];drawCar(x,MF[t],MODS[t],c,(dir?Math.PI:0)+q*.15,.22,40,100,86,{})},2))};
+for(let s2=0;s2<RC.length;s2++)for(let d=0;d<2;d++)for(let q=-1;q<=1;q++)rspr(s2,d,q*.15);
 const canS=mk(48,48,x=>{
  const gl=x.createRadialGradient(24,24,8,24,24,24);gl.addColorStop(0,'rgba(255,170,30,.5)');gl.addColorStop(1,'rgba(255,170,30,0)');x.fillStyle=gl;x.fillRect(0,0,48,48);
  x.beginPath();x.roundRect(5,5,38,38,9);x.fillStyle='#160a33';x.fill();x.lineWidth=2.2;x.strokeStyle='#ffb82e';x.stroke();x.lineJoin='round';
@@ -258,16 +259,23 @@ function upd(dt){
  const seg=segs[(pos/SL|0)%N],mx=maxSp(),br=(K.ArrowDown||K.KeyS||tBrake)?1:0,lim=br?mx*.18:mx;braking=br;
  stS+=(steer()-stS)*Math.min(1,dt*7);
  speed+=(lim-speed)*Math.min(1,dt*(br?3.2:1.6));const sp=speed/mx;leanA+=((stS*.07+seg.c*sp*.01)-leanA)*Math.min(1,dt*7);
- px+=stS*dt*2.1;const wall=Math.abs(px)>.88;px=Math.max(-.88,Math.min(.88,px));if(wall){speed*=1-dt*.8;shake=Math.max(shake,.15)}camPx+=(px-camPx)*Math.min(1,dt*7.5);
+ px+=stS*dt*2.1;const wall=Math.abs(px)>.76;px=Math.max(-.76,Math.min(.76,px));if(wall){speed*=1-dt*.8;shake=Math.max(shake,.15)}camPx+=(px-camPx)*Math.min(1,dt*7.5);
  pos+=speed*dt;skyOff+=seg.c*sp*dt*60;score+=speed*dt*.01;fuel-=dt*3;
  shake=Math.max(0,shake-dt);invul=Math.max(0,invul-dt);msgT-=dt;
  if(pos>=L){level++;newTrack(level);pos=0;ents=[];score+=1000;const up=lives<5;lives=Math.min(5,lives+1);$('msg').textContent='COURSE '+level+(up?' · +1 VIE':'');msgT=2.2}
  $('msg').style.opacity=msgT>0?1:0;
- if((tR-=dt)<=0){tR=Math.max(.45,1.1-level*.06)*(.7+Math.random()*.6);const on=Math.random()<.5;ents.push({k:0,z:pos+DD*SL*.98,x:(on?-1:1)*(.3+Math.random()*.25),v:on?-(.3+Math.random()*.2)*mx:(.35+Math.random()*.3)*mx,s:Math.random()*RC.length|0})}
- if((tF-=dt)<=0){tF=5;ents.push({k:1,z:pos+DD*SL*.98,x:Math.random()*1.1-.55})}
+ if((tR-=dt)<=0){tR=Math.max(.3,.8-level*.05)*(.7+Math.random()*.6);const on=Math.random()<.5,tx=(on?-1:1)*[.2,.6][Math.random()*2|0],zz=pos+DD*SL*.98;if(ents.some(b=>!b.k&&Math.abs(b.tx-tx)<.3&&Math.abs(b.z-zz)<5000))tR=.15;else{const v0=on?-(.3+Math.random()*.2)*mx:(.35+Math.random()*.3)*mx;ents.push({k:0,z:zz,x:tx,tx,v:v0,v0,s:Math.random()*RC.length|0})}}
+ if((tF-=dt)<=0){tF=5;ents.push({k:1,z:pos+DD*SL*.98,x:[-.6,-.2,.2,.6][Math.random()*4|0]})}
+  for(const a of ents){if(a.k)continue;const sg=a.v0>0?1:-1;let lead=null,gap=1e9;
+  for(const b of ents){if(b===a||b.k||(b.v0>0)!=(a.v0>0))continue;const d=sg*(b.z-a.z);if(d>0&&d<gap&&Math.abs(b.tx-a.tx)<.3){gap=d;lead=b}}
+  const sv=Math.abs(a.v);
+  if(lead&&gap<6000){const alt=Math.abs(a.tx)<.4?sg*.6:sg*.2,free=!a.chg&&!ents.some(b=>b!==a&&!b.k&&Math.abs(b.tx-alt)<.3&&Math.abs(b.z-a.z)<5500);
+   if(free&&Math.abs(lead.v)<sv-200){a.tx=alt;a.chg=1}else{const lv=Math.abs(lead.v)*(gap<2800?.8:1);if(sv>lv)a.v=sg*lv}}
+  else a.v+=(a.v0-a.v)*Math.min(1,dt*.6);
+  a.x+=(a.tx-a.x)*Math.min(1,dt*1.6);if(Math.abs(a.tx-a.x)<.02)a.chg=0}
  for(let i=ents.length-1;i>=0;i--){const e=ents[i];if(e.k==0)e.z+=e.v*dt;const dz=e.z-pos;
-  if(dz<-300){ents.splice(i,1);if(e.k==0)score+=50;continue}
-  if(dz<260&&dz>-200&&Math.abs(e.x-px)<.21){ents.splice(i,1);
+  if(dz<-1500){ents.splice(i,1);if(e.k==0)score+=50;continue}
+  if(dz<1400&&dz>-400&&Math.abs(e.x-px)<.22){ents.splice(i,1);
    if(e.k==1){fuel=100;score+=200}
    else if(!invul){lives--;invul=1.6;speed*=.4;shake=.5;if(lives<=0)return over('GAME OVER')}}}
  if(fuel<=0){fuel=0;over("PANNE D'ESSENCE")}
@@ -291,6 +299,7 @@ function draw(t){
   const a=P[n+OFF],b=P[n+OFF+1],i=((bi+n)%N+N)%N,ab=fl+n,alt=(ab>>1)&1;
   g.fillStyle=alt?'rgba(255,90,230,.10)':'rgba(0,0,40,.18)';g.fillRect(-4,b.y,W+8,a.y-b.y+1);
   quad(a.x,a.y,a.w,b.x,b.y,b.w,alt?'#150a26':'#110720');
+  if(n<40)[-.6,-.2,.2,.6].forEach(o=>qd(a,b,o,.17,alt?'rgba(255,255,255,.02)':'rgba(0,0,0,.05)'));
   if(ab==N-1||ab==N-2)qd(a,b,0,1,ab&1?'#fff':'#ff4fd8');
   for(const sd of[-1,1]){
    n<50&&qd(a,b,sd*1.07,.07,alt?'#2b1650':'#24123f');
@@ -301,6 +310,7 @@ function draw(t){
    bm(285,330,alt?'#dbe1ff':'#cbd3fa');bm(250,285,'#8f99de');bm(215,250,alt?'#bac3f3':'#aab4ec');bm(195,215,'#4a52a0');bm(330,350,'#fafcff');bm(80,135,'#7c85d0');bm(186,196,'rgba(25,240,255,.7)');
    if(ab%4==0&&n<60){const pw=Math.max(1.2,a.s*155*W/2),ph=a.s*1050*H/2;g.fillStyle='rgba(0,0,0,.35)';g.fillRect(xa-pw*1.2,a.y-pw*.25,pw*2.4,pw*.5);g.fillStyle='#7f89d6';g.fillRect(xa-pw/2,a.y-ph,pw,ph);g.fillStyle='#e4e9ff';g.fillRect(xa-pw/2,a.y-ph,pw*.38,ph);g.fillStyle='#4a52a0';g.fillRect(xa+pw*.2,a.y-ph,pw*.3,ph);g.fillStyle='#fafcff';g.fillRect(xa-pw*.7,a.y-ph-pw*.35,pw*1.4,pw*.55);g.fillStyle=ab%8?'#19f0ff':'#ff4fd8';g.fillRect(xa-pw*.4,a.y-ph*.62,pw*.8,pw*1.1)}}
   [-.05,.05].forEach(o=>{n<50&&qd(a,b,o,.05,'rgba(255,80,220,.2)');qdm(a,b,o,.03,'#2a0a3e',.9);qdm(a,b,o,.021,'#ff4fd8',.65);qdm(a,b,o,.008,'#ffe3f9',.3)});
+  if(alt&&n<70)[-.4,.4].forEach(o=>qdm(a,b,o,.012,'rgba(226,236,255,.85)',.55));
   if(i%24==0&&hs(i+2)>.25){const h=hs(i);spr(cac[((h*3|0)*2+(hs(i*1.3+7)>.72?1:0))*2+(hs(i*2.7+3)>.5?1:0)],a.s,a.x-a.w*(2+h*.9),a.y,3000)}
   if(i%24==12&&hs(i+4)>.25){const h=hs(i);spr(cac[((h*3|0)*2+(hs(i*1.3+7)>.72?1:0))*2+(hs(i*2.7+3)>.5?1:0)],a.s,a.x+a.w*(2+h*.9),a.y,3000)}
   if(i%20==3&&hs(i+4)>.5){const h=hs(i+9),sd=hs(i+5)>.5?1:-1;spr(cac[((h*3|0)*2+(hs(i*1.3+7)>.72?1:0))*2+(hs(i*2.7+3)>.5?1:0)],a.s,a.x+sd*a.w*(3.6+h*2.5),a.y,2100)}
